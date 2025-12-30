@@ -3,7 +3,7 @@
  * Graph rendering, mouse/touch interactions, and visual updates
  */
 
-import { interpolateValue, generateInterpolatedPath, minutesToTime, clamp } from './utils.js';
+import { interpolateValue, interpolateValueWithStepToMin, generateInterpolatedPath, minutesToTime, clamp } from './utils.js';
 
 /**
  * Graph rendering and interaction handler
@@ -717,7 +717,9 @@ export class GraphHandler {
         }
 
         // Get interpolated scheduled value at current time
-        const scheduledValue = interpolateValue(currentMinutes, scheduler.points, scheduler.mode, scheduler.minY, scheduler.maxY);
+        const scheduledValue = (scheduler.stepToZero
+            ? interpolateValueWithStepToMin(currentMinutes, scheduler.points, scheduler.mode, scheduler.minY, scheduler.maxY)
+            : interpolateValue(currentMinutes, scheduler.points, scheduler.mode, scheduler.minY, scheduler.maxY));
         // Next update is driven by the configured interval (even if value remains the same)
         const updateIntervalSec = parseInt(scheduler.updateInterval) || 300;
         const currentSeconds = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
@@ -726,7 +728,9 @@ export class GraphHandler {
         const nextUpdateSeconds = Math.ceil(currentSeconds / updateIntervalSec) * updateIntervalSec;
         const nextUpdateSecondsWrap = nextUpdateSeconds >= 86400 ? nextUpdateSeconds - 86400 : nextUpdateSeconds;
         const nextUpdateMinutes = nextUpdateSecondsWrap / 60;
-        const nextValue = interpolateValue(nextUpdateMinutes, scheduler.points, scheduler.mode, scheduler.minY, scheduler.maxY);
+        const nextValue = (scheduler.stepToZero
+            ? interpolateValueWithStepToMin(nextUpdateMinutes, scheduler.points, scheduler.mode, scheduler.minY, scheduler.maxY)
+            : interpolateValue(nextUpdateMinutes, scheduler.points, scheduler.mode, scheduler.minY, scheduler.maxY));
 
         // Format next time - show seconds if interval is less than 60 seconds
         let nextTimeStr;
@@ -1047,7 +1051,9 @@ export class GraphHandler {
         }
 
         // Get interpolated scheduled value at current time
-        const scheduledValue = interpolateValue(currentMinutes, graph.points, graph.mode, graph.minY, graph.maxY);
+        const scheduledValue = (graph.stepToZero
+            ? interpolateValueWithStepToMin(currentMinutes, graph.points, graph.mode, graph.minY, graph.maxY)
+            : interpolateValue(currentMinutes, graph.points, graph.mode, graph.minY, graph.maxY));
 
         // Next change calculation - find next time where value is DIFFERENT from current
         const updateIntervalSec = parseInt(scheduler.updateInterval) || 300;
@@ -1074,7 +1080,9 @@ export class GraphHandler {
                 continue;
             }
 
-            const checkValue = interpolateValue(checkMinutes, graph.points, graph.mode, graph.minY, graph.maxY);
+            const checkValue = (graph.stepToZero
+                ? interpolateValueWithStepToMin(checkMinutes, graph.points, graph.mode, graph.minY, graph.maxY)
+                : interpolateValue(checkMinutes, graph.points, graph.mode, graph.minY, graph.maxY));
 
             // Check if value is different (using small tolerance for floating point)
             if (Math.abs(checkValue - scheduledValue) > 0.05) {
