@@ -4295,10 +4295,9 @@ async function applySchedulerNow(hass, scheduler) {
                 humidity: Math.round(currentValue)
             });
             break;
-        case 'number':
         case 'input_number':
             await callWithFallback(
-                (val) => hass.callService('number', 'set_value', {
+                (val) => hass.callService('input_number', 'set_value', {
                     entity_id: targetEntity,
                     value: val,
                 }),
@@ -4348,6 +4347,7 @@ function saveScheduler(hass, entityId, scheduler) {
     return hass.callService('universal_scheduler', 'set_schedule_config', {
         entity_id: entityId,
         target_entity: scheduler.entityId,
+        domain: scheduler.domain,
         name: scheduler.name,
         update_interval: scheduler.updateInterval || 300,
         enabled: scheduler.enabled,
