@@ -455,10 +455,9 @@ class UniversalSchedulerSwitch(SwitchEntity, RestoreEntity):
 
     async def _apply_number(self, value: float) -> None:
         """Apply value to a number entity."""
-        domain = self._target_entity.split(".")[0]
-        _LOGGER.debug("Apply %s %s value=%.2f", domain, self._target_entity, value)
+        _LOGGER.debug("Apply number %s value=%.2f", self._target_entity, value)
         await self.hass.services.async_call(
-            domain,
+            "input_number",
             "set_value",
             {"entity_id": self._target_entity, "value": round(value, 2)},
         )

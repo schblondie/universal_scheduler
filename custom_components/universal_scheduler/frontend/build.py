@@ -32,8 +32,8 @@ def strip_module_syntax(content, name):
                 alias_name = as_match.group(2)
                 alias_declarations.append(f'const {alias_name} = {original_name};')
 
-    # Remove export statements
-    content = re.sub(r'^export\s+(const|let|var|function|class)\s+', r'\1 ', content, flags=re.MULTILINE)
+    # Remove export statements (supports optional async)
+    content = re.sub(r'^export\s+(?:async\s+)?(const|let|var|function|class)\s+', r'\1 ', content, flags=re.MULTILINE)
     content = re.sub(r'^export\s+\{[^}]*\}\s*;?\s*$', '', content, flags=re.MULTILINE)
     content = re.sub(r'^export\s+default\s+', '', content, flags=re.MULTILINE)
 

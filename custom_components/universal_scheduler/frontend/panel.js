@@ -4897,7 +4897,7 @@ class UniversalSchedulerPanel extends HTMLElement {
             graphsPerRow: 1,
             graphs: [defaultGraph],
         };
-
+        console.log(`Scheduler created: ${this.schedulers[entityId].entityId} (${this.schedulers[entityId].domain})`);
         this.closeCreateModal();
         this.renderSchedulers();
     }
@@ -5712,7 +5712,10 @@ class UniversalSchedulerPanel extends HTMLElement {
 
     updateGraphSection(entityId, graphIndex, section) {
         const scheduler = this.schedulers[entityId];
+        if (!scheduler || !Array.isArray(scheduler.graphs)) return;
+
         const graph = scheduler.graphs[graphIndex];
+        if (!graph) return;
 
         // Respect per-graph control side preference on every update
         const controlsMenu = section.querySelector('.graph-controls-menu');
@@ -5878,6 +5881,14 @@ class UniversalSchedulerPanel extends HTMLElement {
     }
 
     // Undo/Redo methods
+    _cloneGraphs(scheduler) {
+        const graphs = Array.isArray(scheduler?.graphs) ? scheduler.graphs : [];
+        if (typeof structuredClone === 'function') {
+            return structuredClone(graphs);
+        }
+        return JSON.parse(JSON.stringify(graphs));
+    }
+
     saveUndoState(entityId) {
         const scheduler = this.schedulers[entityId];
         if (!scheduler) return;
@@ -5892,7 +5903,7 @@ class UniversalSchedulerPanel extends HTMLElement {
             snapMinutes: scheduler.snapMinutes,
             updateInterval: scheduler.updateInterval,
             graphsPerRow: scheduler.graphsPerRow,
-            graphs: JSON.parse(JSON.stringify(scheduler.graphs))
+            graphs: this._cloneGraphs(scheduler)
         };
 
         this.undoHistory[entityId].push(state);
@@ -5919,7 +5930,7 @@ class UniversalSchedulerPanel extends HTMLElement {
             snapMinutes: scheduler.snapMinutes,
             updateInterval: scheduler.updateInterval,
             graphsPerRow: scheduler.graphsPerRow,
-            graphs: JSON.parse(JSON.stringify(scheduler.graphs))
+            graphs: this._cloneGraphs(scheduler)
         });
 
         // Restore previous state
@@ -5943,7 +5954,7 @@ class UniversalSchedulerPanel extends HTMLElement {
             snapMinutes: scheduler.snapMinutes,
             updateInterval: scheduler.updateInterval,
             graphsPerRow: scheduler.graphsPerRow,
-            graphs: JSON.parse(JSON.stringify(scheduler.graphs))
+            graphs: this._cloneGraphs(scheduler)
         });
 
         // Restore next state
