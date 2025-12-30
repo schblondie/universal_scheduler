@@ -4228,7 +4228,7 @@ async function callWithFallback(callFactory, values) {
     throw lastError ?? new Error('All apply attempts failed');
 }
 
-export async function applySchedulerNow(hass, scheduler) {
+async function applySchedulerNow(hass, scheduler) {
     // Get current time in minutes
     const now = new Date();
     const currentMinutes = now.getHours() * 60 + now.getMinutes();
