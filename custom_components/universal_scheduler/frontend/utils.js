@@ -167,7 +167,7 @@ export function generateInterpolatedPath(scheduler, startMinute, endMinute) {
     // Ensure end point is included
     if (result.length === 0 || result[result.length - 1].x !== endMinute) {
         const y = stepToZero
-            ? interpolateValueWithStepToZero(endMinute, points, mode, scheduler.minY, scheduler.maxY)
+            ? interpolateValueWithStepToMin(endMinute, points, mode, scheduler.minY, scheduler.maxY)
             : interpolateValue(endMinute, points, mode, scheduler.minY, scheduler.maxY);
         result.push({ x: endMinute, y });
     }
