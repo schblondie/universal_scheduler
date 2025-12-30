@@ -3140,7 +3140,9 @@ class GraphHandler {
         }
 
         // Get interpolated scheduled value at current time
-        const scheduledValue = interpolateValue(currentMinutes, scheduler.points, scheduler.mode, scheduler.minY, scheduler.maxY);
+        const scheduledValue = (scheduler.stepToZero
+            ? interpolateValueWithStepToMin(currentMinutes, scheduler.points, scheduler.mode, scheduler.minY, scheduler.maxY)
+            : interpolateValue(currentMinutes, scheduler.points, scheduler.mode, scheduler.minY, scheduler.maxY));
         // Next update is driven by the configured interval (even if value remains the same)
         const updateIntervalSec = parseInt(scheduler.updateInterval) || 300;
         const currentSeconds = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
@@ -3149,7 +3151,9 @@ class GraphHandler {
         const nextUpdateSeconds = Math.ceil(currentSeconds / updateIntervalSec) * updateIntervalSec;
         const nextUpdateSecondsWrap = nextUpdateSeconds >= 86400 ? nextUpdateSeconds - 86400 : nextUpdateSeconds;
         const nextUpdateMinutes = nextUpdateSecondsWrap / 60;
-        const nextValue = interpolateValue(nextUpdateMinutes, scheduler.points, scheduler.mode, scheduler.minY, scheduler.maxY);
+        const nextValue = (scheduler.stepToZero
+            ? interpolateValueWithStepToMin(nextUpdateMinutes, scheduler.points, scheduler.mode, scheduler.minY, scheduler.maxY)
+            : interpolateValue(nextUpdateMinutes, scheduler.points, scheduler.mode, scheduler.minY, scheduler.maxY));
 
         // Format next time - show seconds if interval is less than 60 seconds
         let nextTimeStr;
@@ -3470,7 +3474,9 @@ class GraphHandler {
         }
 
         // Get interpolated scheduled value at current time
-        const scheduledValue = interpolateValue(currentMinutes, graph.points, graph.mode, graph.minY, graph.maxY);
+        const scheduledValue = (graph.stepToZero
+            ? interpolateValueWithStepToMin(currentMinutes, graph.points, graph.mode, graph.minY, graph.maxY)
+            : interpolateValue(currentMinutes, graph.points, graph.mode, graph.minY, graph.maxY));
 
         // Next change calculation - find next time where value is DIFFERENT from current
         const updateIntervalSec = parseInt(scheduler.updateInterval) || 300;
@@ -3497,7 +3503,9 @@ class GraphHandler {
                 continue;
             }
 
-            const checkValue = interpolateValue(checkMinutes, graph.points, graph.mode, graph.minY, graph.maxY);
+            const checkValue = (graph.stepToZero
+                ? interpolateValueWithStepToMin(checkMinutes, graph.points, graph.mode, graph.minY, graph.maxY)
+                : interpolateValue(checkMinutes, graph.points, graph.mode, graph.minY, graph.maxY));
 
             // Check if value is different (using small tolerance for floating point)
             if (Math.abs(checkValue - scheduledValue) > 0.05) {
@@ -4204,7 +4212,23 @@ class GraphHandler {
 /**
  * Apply scheduler value to entity
  */
-function applySchedulerNow(hass, scheduler) {
+const roundToStep = (value, step) => Math.round(value / step) * step;
+
+async function callWithFallback(callFactory, values) {
+    let lastError;
+    for (const val of values) {
+        try {
+            await callFactory(val);
+            return val;
+        } catch (err) {
+            lastError = err;
+            console.warn('Apply fallback attempt failed for value', val, err);
+        }
+    }
+    throw lastError ?? new Error('All apply attempts failed');
+}
+
+export async function applySchedulerNow(hass, scheduler) {
     // Get current time in minutes
     const now = new Date();
     const currentMinutes = now.getHours() * 60 + now.getMinutes();
@@ -4218,62 +4242,75 @@ function applySchedulerNow(hass, scheduler) {
     const domain = scheduler.domain;
     const targetEntity = scheduler.entityId;
 
-    let serviceCall;
     switch (domain) {
         case 'light':
             const brightness = Math.round((currentValue / 100) * 255);
             if (brightness > 0) {
-                serviceCall = hass.callService('light', 'turn_on', {
+                await hass.callService('light', 'turn_on', {
                     entity_id: targetEntity,
                     brightness: brightness,
                     transition: 2
                 });
             } else {
-                serviceCall = hass.callService('light', 'turn_off', {
+                await hass.callService('light', 'turn_off', {
                     entity_id: targetEntity,
                     transition: 2
                 });
             }
             break;
         case 'climate':
-            serviceCall = hass.callService('climate', 'set_temperature', {
-                entity_id: targetEntity,
-                temperature: Math.round(currentValue * 10) / 10
-            });
+            await callWithFallback(
+                (val) => hass.callService('climate', 'set_temperature', {
+                    entity_id: targetEntity,
+                    temperature: val,
+                }),
+                [
+                    Math.round(currentValue * 10) / 10,     // original 0.1 precision
+                    roundToStep(currentValue, 0.5),          // fallback to 0.5 step
+                    roundToStep(currentValue, 1),            // fallback to 1 step
+                ],
+            );
             break;
         case 'fan':
             if (currentValue > 0) {
-                serviceCall = hass.callService('fan', 'set_percentage', {
+                await hass.callService('fan', 'set_percentage', {
                     entity_id: targetEntity,
                     percentage: Math.round(currentValue)
                 });
             } else {
-                serviceCall = hass.callService('fan', 'turn_off', {
+                await hass.callService('fan', 'turn_off', {
                     entity_id: targetEntity
                 });
             }
             break;
         case 'cover':
-            serviceCall = hass.callService('cover', 'set_cover_position', {
+            await hass.callService('cover', 'set_cover_position', {
                 entity_id: targetEntity,
                 position: Math.round(currentValue)
             });
             break;
         case 'humidifier':
-            serviceCall = hass.callService('humidifier', 'set_humidity', {
+            await hass.callService('humidifier', 'set_humidity', {
                 entity_id: targetEntity,
                 humidity: Math.round(currentValue)
             });
             break;
         case 'number':
         case 'input_number':
-            serviceCall = hass.callService('number', 'set_value', {
-                entity_id: targetEntity,
-                value: Math.round(currentValue * 100) / 100
-            });
+            await callWithFallback(
+                (val) => hass.callService('number', 'set_value', {
+                    entity_id: targetEntity,
+                    value: val,
+                }),
+                [
+                    Math.round(currentValue * 100) / 100,   // original 0.01 precision
+                    roundToStep(currentValue, 0.5),          // fallback to 0.5 step
+                    roundToStep(currentValue, 1),            // fallback to 1 step
+                ],
+            );
             break;
         case 'media_player':
-            serviceCall = hass.callService('media_player', 'volume_set', {
+            await hass.callService('media_player', 'volume_set', {
                 entity_id: targetEntity,
                 volume_level: currentValue / 100
             });
@@ -4283,9 +4320,7 @@ function applySchedulerNow(hass, scheduler) {
             return Promise.reject(new Error(`Unknown domain: ${domain}`));
     }
 
-    return serviceCall.then(() => {
-        console.log(`Applied ${currentValue.toFixed(1)} to ${targetEntity}`);
-    });
+    console.log(`Applied ${currentValue.toFixed(1)} to ${targetEntity}`);
 }
 
 /**
