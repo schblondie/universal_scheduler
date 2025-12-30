@@ -1,4 +1,5 @@
 {
   "name": "Universal Graph Scheduler",
-  "content_in_root": false
+  "content_in_root": false,
+  "persistent_directory": "__pycache__"
 }
