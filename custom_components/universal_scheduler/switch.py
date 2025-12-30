@@ -354,10 +354,11 @@ class UniversalSchedulerSwitch(SwitchEntity, RestoreEntity):
             max_y = float(active_graph.get("max_y", DEFAULT_MAX_Y))
             points = active_graph.get("points", [{"x": 0, "y": 0}, {"x": 1440, "y": 0}])
             attribute = active_graph.get("attribute")
+            step_to_min = bool(active_graph.get("step_to_zero", False))  # legacy flag name
 
             # 3. Get the Y value at this minute using the active graph
             val_ratio = self._calculate_y_ratio_from_points(
-                current_minute, points, mode, min_y, max_y
+                current_minute, points, mode, min_y, max_y, step_to_min
             )
 
             # 4. Map ratio to actual value
@@ -554,7 +555,7 @@ class UniversalSchedulerSwitch(SwitchEntity, RestoreEntity):
         )
 
     def _calculate_y_ratio_from_points(
-        self, current_minute: float, points: list, mode: str, min_y: float, max_y: float
+        self, current_minute: float, points: list, mode: str, min_y: float, max_y: float, step_to_min: bool = False
     ) -> float:
         """Calculate the Y value (0.0 to 1.0) at the given minute for specific graph points."""
         if not points or len(points) < 2:
@@ -580,7 +581,7 @@ class UniversalSchedulerSwitch(SwitchEntity, RestoreEntity):
             if p1["x"] <= current_minute <= p2["x"]:
                 # We're between these two points
                 return self._interpolate_points(
-                    p1, p2, current_minute, mode, min_y, max_y
+                    p1, p2, current_minute, mode, min_y, max_y, step_to_min
                 )
 
         # We're after the last point
@@ -598,6 +599,7 @@ class UniversalSchedulerSwitch(SwitchEntity, RestoreEntity):
         mode: str,
         min_y: float,
         max_y: float,
+        step_to_min: bool = False,
     ) -> float:
         """Interpolate between two points based on mode."""
         if p1["x"] == p2["x"]:
@@ -609,7 +611,7 @@ class UniversalSchedulerSwitch(SwitchEntity, RestoreEntity):
 
         if mode == MODE_STEP:
             # Step function - stay at p1's value until we reach p2
-            return y1
+            return 0.0 if step_to_min and p2["y"] <= min_y else y1
         elif mode == MODE_SMOOTH:
             # Cosine interpolation for smooth curves
             return y1 + (y2 - y1) * (1 - math.cos(ratio * math.pi)) / 2

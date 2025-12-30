@@ -154,7 +154,7 @@ export function generateInterpolatedPath(scheduler, startMinute, endMinute) {
     // If stepToZero is enabled, we need to handle zero points specially
     if (stepToZero) {
         for (let x = startMinute; x <= endMinute; x += step) {
-            const y = interpolateValueWithStepToZero(x, points, mode, scheduler.minY, scheduler.maxY);
+            const y = interpolateValueWithStepToMin(x, points, mode, scheduler.minY, scheduler.maxY);
             result.push({ x, y });
         }
     } else {
@@ -259,7 +259,7 @@ export function interpolateValue(x, points, mode, minY, maxY) {
  * When stepToZero is enabled and a point has y=0, the line will immediately drop to 0
  * instead of interpolating down to it
  */
-export function interpolateValueWithStepToZero(x, points, mode, minY, maxY) {
+export function interpolateValueWithStepToMin(x, points, mode, minY, maxY) {
     if (points.length === 0) return minY;
     if (points.length === 1) return points[0].y;
 
@@ -281,16 +281,15 @@ export function interpolateValueWithStepToZero(x, points, mode, minY, maxY) {
     if (x <= points[0].x) return points[0].y;
     if (x >= points[points.length - 1].x) return points[points.length - 1].y;
 
-    // Step-to-zero logic: if next point is 0, return 0 immediately
-    // Or if current point is 0, return 0 until we hit next point
-    if (p2.y === 0 || p2.y === minY) {
-        return 0; // Step down to zero immediately before a zero point
+    // Step-to-min logic: if next point is at/below min, stay at min until the change point
+    if (p2.y === minY) {
+        return minY;
     }
-    if (p1.y === 0 || p1.y === minY) {
-        // If coming from zero, step up immediately at the exact point
+    if (p1.y === minY) {
+        // If coming from min, stay flat until we cross the point, then follow normal interpolation
         const t = (x - p1.x) / (p2.x - p1.x);
-        if (t < 0.01) return 0; // Still at zero until just past the point
-        return interpolateValue(x, points, mode, minY, maxY); // Then interpolate normally
+        if (t < 0.01) return minY;
+        return interpolateValue(x, points, mode, minY, maxY);
     }
 
     // Otherwise, use normal interpolation

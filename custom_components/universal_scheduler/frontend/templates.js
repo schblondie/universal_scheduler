@@ -201,7 +201,7 @@ export function createGraphHTML(graph, graphIndex, scheduler) {
                         </select>
                     </div>
                     <div class="input-group">
-                        <label>Step to 0</label>
+                        <label>Step to min</label>
                         <div class="toggle-switch small ${graph.stepToZero ? 'active' : ''}" data-graph-setting="stepToZero"></div>
                     </div>
                     <div class="input-group">
