@@ -3,6 +3,7 @@
 A Home Assistant integration for creating and managing customizable scheduler curves. This allows you to define complex time-based control patterns for lights, climate systems, and other entities using an interactive graph interface.
 
 ![Example Graph](example.png)
+
 ## Features
 
 - **Interactive Graph Editor**: Draw scheduler curves with click-to-add points and drag-to-adjust points
@@ -16,14 +17,22 @@ A Home Assistant integration for creating and managing customizable scheduler cu
   - Number entities (generic numeric values)
 - **Real-time Updates**: Automatically applies scheduled values every with customizable intervals
 
+### To be added:
+
+- Support for additional entity domains
+- Custom X-axis types with support for entity states/attributes
+- Enhanced UI features (zoom, pan, presets)
+- Settings for pausing/resuming schedules when manual control is detected
+
 ## Installation
-### Method 1:
+
+### Method 1
 
 1. Add https://github.com/schblondie/universal_scheduler with the category "integration" as a custom repository in HACS
 2. Install it in HACS
 3. Restart Home Assistant
 
-### Method 2:
+### Method 2
 
 1. Manually copy universal_scheduler folder from latest release to config/custom_components folder.
 2. Restart Home Assistant
@@ -65,13 +74,16 @@ A Home Assistant integration for creating and managing customizable scheduler cu
 ### Key Components
 
 #### UniversalSchedulerSwitch
+
 Main entity class that:
+
 - Manages on/off state
 - Calculates values based on current time and curve
 - Applies values to target entities based on domain type
 - Supports state restoration on startup
 
 #### Interpolation Functions
+
 - **Linear**: `y = y1 + (y2 - y1) * t`
 - **Smooth (Cosine)**: `y = y1 + (y2 - y1) * (1 - cos(t*π)) / 2`
 - **Step**: Returns y1 until reaching p2
@@ -83,6 +95,7 @@ Main entity class that:
 Creates a new scheduler curve entity.
 
 **Service data:**
+
 - `name` (string, required): Friendly name for the scheduler
 - `entity_id` (string, required): Entity ID (e.g., `switch.my_scheduler`)
 
@@ -91,6 +104,7 @@ Creates a new scheduler curve entity.
 Updates scheduler configuration.
 
 **Service data:**
+
 - `entity_id` (string, required): Scheduler entity ID
 - `target_entity` (string): Entity to control
 - `domain` (string): light, climate, or number
@@ -102,12 +116,14 @@ Updates scheduler configuration.
 ## Examples
 
 ### Temperature Scheduler
+
 - Domain: Climate
 - Min Y: 16°C
 - Max Y: 24°C
 - Points: Cool to 16°C at night, warm up to 21°C by morning, maintain 22°C during day, cool to 18°C in evening
 
 ### Light Brightness Scheduler
+
 - Domain: Light
 - Min Y: 0% (off)
 - Max Y: 100% (full brightness)
@@ -117,16 +133,19 @@ Updates scheduler configuration.
 ## Troubleshooting
 
 ### Scheduler not applying values
+
 - Ensure the scheduler switch is turned ON
 - Check that the target entity is correctly configured
 - Verify the domain type matches the target entity
 
 ### Graph not showing
+
 - Hard refresh the browser (Ctrl+Shift+R or Cmd+Shift+R)
 - Check browser console for JavaScript errors
 - Ensure the frontend panel is properly loaded
 
 ### Values not updating
+
 - Check Home Assistant logs for errors
 - Ensure the scheduler is enabled (switch is ON)
 - Verify the target entity exists and accepts the service calls

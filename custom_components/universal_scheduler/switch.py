@@ -609,6 +609,14 @@ class UniversalSchedulerSwitch(SwitchEntity, RestoreEntity):
         y1 = (p1["y"] - min_y) / (max_y - min_y) if max_y != min_y else 0.0
         y2 = (p2["y"] - min_y) / (max_y - min_y) if max_y != min_y else 0.0
 
+        # Step-to-min: hold the curve at the minimum when the next point drops to (or below) min
+        # and avoid easing up from the minimum until we've progressed slightly into the segment.
+        if step_to_min and max_y != min_y:
+            if p2["y"] <= min_y:
+                return 0.0
+            if p1["y"] <= min_y and ratio < 0.01:
+                return 0.0
+
         if mode == MODE_STEP:
             # Step function - stay at p1's value until we reach p2
             return 0.0 if step_to_min and p2["y"] <= min_y else y1

@@ -3,7 +3,7 @@
  * Home Assistant service calls for applying values, saving, and deleting schedulers
  */
 
-import { interpolateValue } from './utils.js';
+import { interpolateValue, interpolateValueWithStepToMin } from './utils.js';
 import { getAttributeUnit } from './attribute-config.js';
 
 /**
@@ -15,7 +15,9 @@ export function applySchedulerNow(hass, scheduler) {
     const currentMinutes = now.getHours() * 60 + now.getMinutes();
 
     // Get interpolated value at current time
-    const currentValue = interpolateValue(currentMinutes, scheduler.points, scheduler.mode, scheduler.minY, scheduler.maxY);
+    const currentValue = (scheduler.stepToZero
+        ? interpolateValueWithStepToMin
+        : interpolateValue)(currentMinutes, scheduler.points, scheduler.mode, scheduler.minY, scheduler.maxY);
 
     // Call appropriate service based on domain
     const domain = scheduler.domain;

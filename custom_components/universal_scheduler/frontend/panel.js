@@ -7,12 +7,11 @@
  * - styles.js
  * - templates.js
  * - utils.js
- * - attribute-config.js
  * - graph.js
  * - services.js
  * - panel-modular.js
  *
- * Then run: python build.py
+ * Then run: node build.js
  */
 
 (function() {
@@ -1905,7 +1904,7 @@ function createGraphHTML(graph, graphIndex, scheduler) {
                         </select>
                     </div>
                     <div class="input-group">
-                        <label>Step to 0</label>
+                        <label>Step to min</label>
                         <div class="toggle-switch small ${graph.stepToZero ? 'active' : ''}" data-graph-setting="stepToZero"></div>
                     </div>
                     <div class="input-group">
@@ -2258,7 +2257,7 @@ function generateInterpolatedPath(scheduler, startMinute, endMinute) {
     // If stepToZero is enabled, we need to handle zero points specially
     if (stepToZero) {
         for (let x = startMinute; x <= endMinute; x += step) {
-            const y = interpolateValueWithStepToZero(x, points, mode, scheduler.minY, scheduler.maxY);
+            const y = interpolateValueWithStepToMin(x, points, mode, scheduler.minY, scheduler.maxY);
             result.push({ x, y });
         }
     } else {
@@ -2271,7 +2270,7 @@ function generateInterpolatedPath(scheduler, startMinute, endMinute) {
     // Ensure end point is included
     if (result.length === 0 || result[result.length - 1].x !== endMinute) {
         const y = stepToZero
-            ? interpolateValueWithStepToZero(endMinute, points, mode, scheduler.minY, scheduler.maxY)
+            ? interpolateValueWithStepToMin(endMinute, points, mode, scheduler.minY, scheduler.maxY)
             : interpolateValue(endMinute, points, mode, scheduler.minY, scheduler.maxY);
         result.push({ x: endMinute, y });
     }
@@ -2363,7 +2362,7 @@ function interpolateValue(x, points, mode, minY, maxY) {
  * When stepToZero is enabled and a point has y=0, the line will immediately drop to 0
  * instead of interpolating down to it
  */
-function interpolateValueWithStepToZero(x, points, mode, minY, maxY) {
+function interpolateValueWithStepToMin(x, points, mode, minY, maxY) {
     if (points.length === 0) return minY;
     if (points.length === 1) return points[0].y;
 
@@ -2385,16 +2384,15 @@ function interpolateValueWithStepToZero(x, points, mode, minY, maxY) {
     if (x <= points[0].x) return points[0].y;
     if (x >= points[points.length - 1].x) return points[points.length - 1].y;
 
-    // Step-to-zero logic: if next point is 0, return 0 immediately
-    // Or if current point is 0, return 0 until we hit next point
-    if (p2.y === 0 || p2.y === minY) {
-        return 0; // Step down to zero immediately before a zero point
+    // Step-to-min logic: if next point is at/below min, stay at min until the change point
+    if (p2.y === minY) {
+        return minY;
     }
-    if (p1.y === 0 || p1.y === minY) {
-        // If coming from zero, step up immediately at the exact point
+    if (p1.y === minY) {
+        // If coming from min, stay flat until we cross the point, then follow normal interpolation
         const t = (x - p1.x) / (p2.x - p1.x);
-        if (t < 0.01) return 0; // Still at zero until just past the point
-        return interpolateValue(x, points, mode, minY, maxY); // Then interpolate normally
+        if (t < 0.01) return minY;
+        return interpolateValue(x, points, mode, minY, maxY);
     }
 
     // Otherwise, use normal interpolation
@@ -2419,164 +2417,6 @@ function parsePoints(pointsData) {
  */
 function clamp(value, min, max) {
     return Math.max(min, Math.min(max, value));
-}
-
-
-
-// === ATTRIBUTE CONFIG ===
-/**
- * Universal Scheduler - Attribute Configuration
- *
- * Defines attribute-specific settings like units and ranges.
- * Add new attribute configurations here to extend support.
- */
-
-/**
- * Attribute configuration map
- *
- * Each entry defines:
- * - unit: The unit to display for this attribute
- * - minY: Default minimum value (can be overridden by entity attributes)
- * - maxY: Default maximum value (can be overridden by entity attributes)
- * - minAttr: Entity attribute name for min value (optional)
- * - maxAttr: Entity attribute name for max value (optional)
- *
- * Add new attributes by adding entries to this object.
- */
-const ATTRIBUTE_CONFIG = {
-    // Light attributes
-    brightness: {
-        unit: '',
-        minY: 0,
-        maxY: 255
-    },
-    color_temp: {
-        unit: 'mireds',
-        minY: 153,  // ~6500K
-        maxY: 500,  // ~2000K
-        minAttr: 'min_mireds',
-        maxAttr: 'max_mireds'
-    },
-    color_temp_kelvin: {
-        unit: 'K',
-        minY: 2000,
-        maxY: 6500,
-        minAttr: 'min_color_temp_kelvin',
-        maxAttr: 'max_color_temp_kelvin'
-    },
-
-    // Climate attributes
-    temperature: {
-        unit: '°C',
-        minY: 10,
-        maxY: 30,
-        minAttr: 'min_temp',
-        maxAttr: 'max_temp'
-    },
-    humidity: {
-        unit: '%',
-        minY: 0,
-        maxY: 100,
-        minAttr: 'min_humidity',
-        maxAttr: 'max_humidity'
-    },
-
-    // Fan attributes
-    percentage: {
-        unit: '%',
-        minY: 0,
-        maxY: 100
-    },
-
-    // Cover attributes
-    current_position: {
-        unit: '%',
-        minY: 0,
-        maxY: 100
-    },
-    current_tilt_position: {
-        unit: '%',
-        minY: 0,
-        maxY: 100
-    },
-
-    // Media player attributes
-    volume_level: {
-        unit: '%',
-        minY: 0,
-        maxY: 100
-    },
-
-    // Generic numeric attributes (add more as needed)
-    // Example:
-    // my_custom_attribute: {
-    //     unit: 'units',
-    //     minY: 0,
-    //     maxY: 100,
-    //     minAttr: 'min_custom',  // optional
-    //     maxAttr: 'max_custom'   // optional
-    // }
-};
-
-/**
- * Get attribute configuration
- *
- * @param {string} attributeName - The attribute name
- * @returns {object|null} The attribute config or null if not found
- */
-function getAttributeConfig(attributeName) {
-    return ATTRIBUTE_CONFIG[attributeName] || null;
-}
-
-/**
- * Get unit for an attribute
- *
- * @param {string} attributeName - The attribute name
- * @param {string} defaultUnit - Default unit if attribute is not configured
- * @returns {string} The unit string
- */
-function getAttributeUnit(attributeName, defaultUnit = '') {
-    const config = ATTRIBUTE_CONFIG[attributeName];
-    return config ? config.unit : defaultUnit;
-}
-
-/**
- * Get range for an attribute, considering entity attributes
- *
- * @param {string} attributeName - The attribute name
- * @param {object} entityAttrs - Entity attributes object from Home Assistant
- * @param {object} defaultRange - Default range {minY, maxY} if attribute is not configured
- * @returns {object} Range object {minY, maxY}
- */
-function getAttributeRange(attributeName, entityAttrs = {}, defaultRange = { minY: 0, maxY: 100 }) {
-    const config = ATTRIBUTE_CONFIG[attributeName];
-
-    if (!config) {
-        return defaultRange;
-    }
-
-    let minY = config.minY;
-    let maxY = config.maxY;
-
-    // Override with entity-specific min/max if available
-    if (config.minAttr && entityAttrs[config.minAttr] !== undefined) {
-        minY = entityAttrs[config.minAttr];
-    }
-    if (config.maxAttr && entityAttrs[config.maxAttr] !== undefined) {
-        maxY = entityAttrs[config.maxAttr];
-    }
-
-    return { minY, maxY };
-}
-
-/**
- * Check if an attribute has known configuration
- *
- * @param {string} attributeName - The attribute name
- * @returns {boolean} True if attribute is configured
- */
-function isKnownAttribute(attributeName) {
-    return attributeName in ATTRIBUTE_CONFIG;
 }
 
 
@@ -4370,7 +4210,9 @@ function applySchedulerNow(hass, scheduler) {
     const currentMinutes = now.getHours() * 60 + now.getMinutes();
 
     // Get interpolated value at current time
-    const currentValue = interpolateValue(currentMinutes, scheduler.points, scheduler.mode, scheduler.minY, scheduler.maxY);
+    const currentValue = (scheduler.stepToZero
+        ? interpolateValueWithStepToMin
+        : interpolateValue)(currentMinutes, scheduler.points, scheduler.mode, scheduler.minY, scheduler.maxY);
 
     // Call appropriate service based on domain
     const domain = scheduler.domain;
