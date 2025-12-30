@@ -1,0 +1,11 @@
+{
+  "domain": "universal_scheduler",
+  "name": "Universal Graph Scheduler",
+  "version": "1.0.0",
+  "documentation": "https://github.com/schblondie/ha-universal-scheduler",
+  "dependencies": ["frontend", "panel_custom"],
+  "codeowners": ["@schblondie"],
+  "iot_class": "local_polling",
+  "config_flow": true,
+  "requirements": []
+}

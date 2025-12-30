@@ -1,0 +1,63 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Universal Scheduler",
+        "description": "Set up the Universal Scheduler panel for creating and managing scheduler curves"
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "Only one Universal Scheduler instance is allowed"
+    }
+  },
+  "services": {
+    "create_scheduler": {
+      "name": "Create Scheduler",
+      "description": "Create a new scheduler curve entity",
+      "fields": {
+        "name": {
+          "name": "Name",
+          "description": "The name of the scheduler curve"
+        },
+        "entity_id": {
+          "name": "Entity ID",
+          "description": "The entity ID for the new scheduler (e.g., switch.my_scheduler)"
+        }
+      }
+    },
+    "set_schedule_config": {
+      "name": "Set Schedule Config",
+      "description": "Configure a scheduler curve with target entity and points",
+      "fields": {
+        "entity_id": {
+          "name": "Entity ID",
+          "description": "The scheduler switch entity ID"
+        },
+        "target_entity": {
+          "name": "Target Entity",
+          "description": "The entity to control (e.g., light.living_room, climate.bedroom)"
+        },
+        "domain": {
+          "name": "Domain",
+          "description": "The domain type (light, climate, or number)"
+        },
+        "mode": {
+          "name": "Interpolation Mode",
+          "description": "The interpolation mode (Linear, Smooth, or Step)"
+        },
+        "min_y": {
+          "name": "Minimum Y Value",
+          "description": "The minimum value on the Y-axis"
+        },
+        "max_y": {
+          "name": "Maximum Y Value",
+          "description": "The maximum value on the Y-axis"
+        },
+        "points": {
+          "name": "Curve Points",
+          "description": "Array of {x, y} points defining the curve"
+        }
+      }
+    }
+  }
+}

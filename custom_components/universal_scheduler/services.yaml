@@ -1,0 +1,93 @@
+create_scheduler:
+  name: Create Scheduler
+  description: Create a new scheduler curve entity
+  fields:
+    name:
+      name: Name
+      description: The name of the scheduler curve
+      required: true
+      example: "Living Room Temperature"
+    entity_id:
+      name: Entity ID
+      description: The target entity to schedule (e.g., light.living_room)
+      required: true
+      example: "light.living_room"
+
+set_schedule_config:
+  name: Set Schedule Config
+  description: Configure a scheduler curve with target entity and points
+  fields:
+    entity_id:
+      name: Entity ID
+      description: The target entity ID being scheduled
+      required: true
+      example: "light.living_room"
+    target_entity:
+      name: Target Entity
+      description: The entity to control (e.g., light.living_room, climate.bedroom)
+      required: false
+      example: "light.living_room"
+    name:
+      name: Name
+      description: Display name for the scheduler
+      required: false
+      example: "Living Room Light Schedule"
+    domain:
+      name: Domain
+      description: The domain type (light, climate, or number)
+      required: false
+      example: "light"
+    mode:
+      name: Interpolation Mode
+      description: The interpolation mode (linear, smooth, or step)
+      required: false
+      example: "linear"
+    min_y:
+      name: Minimum Y Value
+      description: The minimum value on the Y-axis
+      required: false
+      example: 0
+    max_y:
+      name: Maximum Y Value
+      description: The maximum value on the Y-axis
+      required: false
+      example: 100
+    snap_minutes:
+      name: Snap Minutes
+      description: X-axis snapping interval in minutes (null for global setting)
+      required: false
+      example: 30
+    enabled:
+      name: Enabled
+      description: Whether the scheduler is enabled
+      required: false
+      example: true
+    points:
+      name: Curve Points
+      description: Array of {x, y} points defining the curve (x in minutes 0-1440, y in unit value)
+      required: false
+      example: [{"x": 0, "y": 0}, {"x": 720, "y": 100}, {"x": 1440, "y": 0}]
+
+delete_scheduler:
+  name: Delete Scheduler
+  description: Delete a scheduler for an entity
+  fields:
+    entity_id:
+      name: Entity ID
+      description: The target entity ID to remove the scheduler for
+      required: true
+      example: "light.living_room"
+
+apply_now:
+  name: Apply Now
+  description: Immediately apply the current scheduled value to the target entity
+  fields:
+    entity_id:
+      name: Entity ID
+      description: The target entity ID to apply the scheduled value to
+      required: true
+      example: "light.living_room"
+
+get_schedulers:
+  name: Get Schedulers
+  description: Get all scheduler configurations from storage (for frontend use)
