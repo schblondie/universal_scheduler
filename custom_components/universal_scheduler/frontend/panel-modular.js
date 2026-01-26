@@ -926,7 +926,26 @@ class UniversalSchedulerPanel extends HTMLElement {
         section.querySelector('[data-graph-setting="xAxisType"]')?.addEventListener('change', (e) => {
             this.saveUndoState(entityId);
             const graph = getGraph();
+            const prevType = graph.xAxisType;
             graph.xAxisType = e.target.value;
+
+            // When switching X-axis types, reset points to default range
+            // This prevents having points at x=1440 when switching to entity-based (0-100)
+            if (prevType !== graph.xAxisType) {
+                const isNowEntityBased = graph.xAxisType === 'entity';
+                const xMin = isNowEntityBased ? (graph.xAxisMin ?? 0) : 0;
+                const xMax = isNowEntityBased ? (graph.xAxisMax ?? 100) : 1440;
+
+                // Reset points to span the new X range
+                graph.points = [
+                    { x: xMin, y: graph.minY },
+                    { x: xMax, y: graph.maxY }
+                ];
+
+                // Reset zoom when switching modes
+                graph.zoomLevel = 1;
+                graph.zoomOffset = 0;
+            }
 
             // Show/hide entity-based X-axis settings
             const showEntity = graph.xAxisType === 'entity';
@@ -960,23 +979,39 @@ class UniversalSchedulerPanel extends HTMLElement {
             graph.xAxisEntity = e.target.value || null;
 
             // Try to auto-detect min/max from entity attributes
+            let boundsChanged = false;
             if (graph.xAxisEntity && this._hass?.states[graph.xAxisEntity]) {
                 const entityState = this._hass.states[graph.xAxisEntity];
                 const attrs = entityState.attributes || {};
 
                 // Auto-fill min/max if available
-                if (attrs.min !== undefined) {
+                if (attrs.min !== undefined && graph.xAxisMin !== attrs.min) {
                     graph.xAxisMin = attrs.min;
                     section.querySelector('[data-graph-setting="xAxisMin"]').value = attrs.min;
+                    boundsChanged = true;
                 }
-                if (attrs.max !== undefined) {
+                if (attrs.max !== undefined && graph.xAxisMax !== attrs.max) {
                     graph.xAxisMax = attrs.max;
                     section.querySelector('[data-graph-setting="xAxisMax"]').value = attrs.max;
+                    boundsChanged = true;
                 }
                 if (attrs.unit_of_measurement) {
                     graph.xAxisUnit = attrs.unit_of_measurement;
                     section.querySelector('[data-graph-setting="xAxisUnit"]').value = attrs.unit_of_measurement;
                 }
+            }
+
+            // Reset points to new range when bounds change from entity detection
+            if (boundsChanged) {
+                const xMin = graph.xAxisMin ?? 0;
+                const xMax = graph.xAxisMax ?? 100;
+                graph.points = [
+                    { x: xMin, y: graph.minY },
+                    { x: xMax, y: graph.maxY }
+                ];
+                graph.zoomLevel = 1;
+                graph.zoomOffset = 0;
+                this.graphHandler.renderPointsListMulti(entityId, graphIndex, section);
             }
 
             this.updateGraphSection(entityId, graphIndex, section);
@@ -990,14 +1025,46 @@ class UniversalSchedulerPanel extends HTMLElement {
         // X-axis min/max/unit handlers
         section.querySelector('[data-graph-setting="xAxisMin"]')?.addEventListener('change', (e) => {
             this.saveUndoState(entityId);
-            getGraph().xAxisMin = parseFloat(e.target.value);
+            const graph = getGraph();
+            const newMin = parseFloat(e.target.value);
+            const xMax = graph.xAxisMax ?? 100;
+
+            // Clip existing points to new range
+            graph.points = graph.points.map(p => ({
+                x: Math.max(newMin, Math.min(xMax, p.x)),
+                y: p.y
+            }));
+
+            graph.xAxisMin = newMin;
+
+            // Reset zoom when bounds change
+            graph.zoomLevel = 1;
+            graph.zoomOffset = 0;
+
             this.updateGraphSection(entityId, graphIndex, section);
+            this.graphHandler.renderPointsListMulti(entityId, graphIndex, section);
         });
 
         section.querySelector('[data-graph-setting="xAxisMax"]')?.addEventListener('change', (e) => {
             this.saveUndoState(entityId);
-            getGraph().xAxisMax = parseFloat(e.target.value);
+            const graph = getGraph();
+            const xMin = graph.xAxisMin ?? 0;
+            const newMax = parseFloat(e.target.value);
+
+            // Clip existing points to new range
+            graph.points = graph.points.map(p => ({
+                x: Math.max(xMin, Math.min(newMax, p.x)),
+                y: p.y
+            }));
+
+            graph.xAxisMax = newMax;
+
+            // Reset zoom when bounds change
+            graph.zoomLevel = 1;
+            graph.zoomOffset = 0;
+
             this.updateGraphSection(entityId, graphIndex, section);
+            this.graphHandler.renderPointsListMulti(entityId, graphIndex, section);
         });
 
         section.querySelector('[data-graph-setting="xAxisUnit"]')?.addEventListener('change', (e) => {
@@ -1883,19 +1950,8 @@ class UniversalSchedulerPanel extends HTMLElement {
 
         console.log(`Entity-based apply: X=${clampedX} -> Y=${yValue} for ${schedulerEntityId}`);
 
-        // Call the backend to apply the value
-        try {
-            await this._hass.callService('universal_scheduler', 'apply_entity_value', {
-                entity_id: schedulerEntityId,
-                graph_index: graphIndex,
-                x_value: clampedX,
-                y_value: yValue
-            });
-        } catch (err) {
-            console.warn('Failed to apply entity-based value:', err);
-            // Fall back to direct service call based on domain
-            await this._applyValueDirectly(scheduler, graph, yValue);
-        }
+        // Apply value directly to the target entity
+        await this._applyValueDirectly(scheduler, graph, yValue);
     }
 
     /**

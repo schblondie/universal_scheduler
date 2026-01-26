@@ -798,6 +798,7 @@ export class GraphHandler {
 
     /**
      * Render a specific graph section (multi-graph support)
+     * Supports both time-based and entity-based X-axis
      */
     renderGraphSection(entityId, graphIndex, section) {
         const scheduler = this.schedulers[entityId];
@@ -818,12 +819,27 @@ export class GraphHandler {
         // Sort points by x
         graph.points.sort((a, b) => a.x - b.x);
 
-        // Calculate visible range
+        // Calculate visible range based on X-axis type
+        const isEntityBased = graph.xAxisType === 'entity';
         const zoomLevel = graph.zoomLevel || 1;
         const zoomOffset = graph.zoomOffset || 0;
-        const visibleMinutes = 1440 / zoomLevel;
-        const startMinute = zoomOffset;
-        const endMinute = startMinute + visibleMinutes;
+
+        let xMin, xMax, visibleRange, startX, endX;
+        if (isEntityBased) {
+            xMin = graph.xAxisMin ?? 0;
+            xMax = graph.xAxisMax ?? 100;
+            const xRange = xMax - xMin;
+            visibleRange = xRange / zoomLevel;
+            startX = xMin + zoomOffset * xRange;
+            endX = startX + visibleRange;
+        } else {
+            xMin = 0;
+            xMax = 1440;
+            visibleRange = 1440 / zoomLevel;
+            startX = zoomOffset;
+            endX = startX + visibleRange;
+        }
+
         const yRange = graph.maxY - graph.minY;
 
         // Generate interpolated path using graph's points
@@ -833,7 +849,7 @@ export class GraphHandler {
             minY: graph.minY,
             maxY: graph.maxY,
             stepToZero: graph.stepToZero
-        }, startMinute, endMinute);
+        }, startX, endX);
 
         // Use viewBox coordinates (0-100 for both axes)
         svg.setAttribute('viewBox', '0 0 100 100');
@@ -843,7 +859,7 @@ export class GraphHandler {
         let fillD = '';
 
         pathPoints.forEach((p, i) => {
-            const px = ((p.x - startMinute) / visibleMinutes) * 100;
+            const px = ((p.x - startX) / visibleRange) * 100;
             const py = (1 - (p.y - graph.minY) / yRange) * 100;
 
             if (i === 0) {
@@ -857,7 +873,7 @@ export class GraphHandler {
 
         // Close fill area
         if (pathPoints.length > 0) {
-            const lastPx = ((pathPoints[pathPoints.length - 1].x - startMinute) / visibleMinutes) * 100;
+            const lastPx = ((pathPoints[pathPoints.length - 1].x - startX) / visibleRange) * 100;
             fillD += ` L ${lastPx} 100 Z`;
         }
 
@@ -866,9 +882,9 @@ export class GraphHandler {
 
         // Render draggable points
         graph.points.forEach((point, index) => {
-            if (point.x < startMinute || point.x > endMinute) return;
+            if (point.x < startX || point.x > endX) return;
 
-            const px = ((point.x - startMinute) / visibleMinutes) * 100;
+            const px = ((point.x - startX) / visibleRange) * 100;
             const py = (1 - (point.y - graph.minY) / yRange) * 100;
 
             const el = document.createElement('div');
@@ -1624,6 +1640,7 @@ export class GraphHandler {
 
     /**
      * Handle wheel zoom for multi-graph mode
+     * Supports both time-based and entity-based X-axis
      */
     handleGraphWheelMulti(e, entityId, graphIndex, section) {
         e.preventDefault();
@@ -1637,24 +1654,59 @@ export class GraphHandler {
         if (!graphContainer) return;
         const rect = graphContainer.getBoundingClientRect();
 
+        // Calculate X range based on axis type
+        const isEntityBased = graph.xAxisType === 'entity';
+        let xMin, xMax, xRange;
+        if (isEntityBased) {
+            xMin = graph.xAxisMin ?? 0;
+            xMax = graph.xAxisMax ?? 100;
+            xRange = xMax - xMin;
+        } else {
+            xMin = 0;
+            xMax = 1440;
+            xRange = 1440;
+        }
+
         const xRatio = (e.clientX - rect.left) / rect.width;
         const zoomLevel = graph.zoomLevel || 1;
-        const visibleMinutes = 1440 / zoomLevel;
-        const mouseMinute = (graph.zoomOffset || 0) + xRatio * visibleMinutes;
+        const visibleRange = xRange / zoomLevel;
+
+        // Calculate mouse position in X units
+        const zoomOffsetX = isEntityBased
+            ? xMin + (graph.zoomOffset || 0) * xRange
+            : (graph.zoomOffset || 0);
+        const mouseX = zoomOffsetX + xRatio * visibleRange;
 
         if (e.deltaY < 0 && zoomLevel < 96) {
             graph.zoomLevel = Math.min(96, zoomLevel * 1.25);
-            const newVisibleMinutes = 1440 / graph.zoomLevel;
-            graph.zoomOffset = Math.max(0, Math.min(1440 - newVisibleMinutes, mouseMinute - xRatio * newVisibleMinutes));
+            const newVisibleRange = xRange / graph.zoomLevel;
+            const newOffset = mouseX - xRatio * newVisibleRange;
+            if (isEntityBased) {
+                // Store as ratio for entity-based
+                graph.zoomOffset = Math.max(0, Math.min(1 - 1/graph.zoomLevel, (newOffset - xMin) / xRange));
+            } else {
+                graph.zoomOffset = Math.max(0, Math.min(xMax - newVisibleRange, newOffset));
+            }
             this.panel.updateGraphSection(entityId, graphIndex, section);
         } else if (e.deltaY > 0 && zoomLevel > 1) {
             graph.zoomLevel = Math.max(1, zoomLevel / 1.25);
-            const newVisibleMinutes = 1440 / graph.zoomLevel;
-            graph.zoomOffset = Math.max(0, Math.min(1440 - newVisibleMinutes, mouseMinute - xRatio * newVisibleMinutes));
+            const newVisibleRange = xRange / graph.zoomLevel;
+            const newOffset = mouseX - xRatio * newVisibleRange;
+            if (isEntityBased) {
+                graph.zoomOffset = Math.max(0, Math.min(1 - 1/graph.zoomLevel, (newOffset - xMin) / xRange));
+            } else {
+                graph.zoomOffset = Math.max(0, Math.min(xMax - newVisibleRange, newOffset));
+            }
             this.panel.updateGraphSection(entityId, graphIndex, section);
         } else if (e.shiftKey && zoomLevel > 1) {
-            const panDelta = (e.deltaY > 0 ? 1 : -1) * (visibleMinutes / 4);
-            graph.zoomOffset = Math.max(0, Math.min(1440 - visibleMinutes, (graph.zoomOffset || 0) + panDelta));
+            const panDelta = (e.deltaY > 0 ? 1 : -1) * (visibleRange / 4);
+            if (isEntityBased) {
+                const currentOffset = xMin + (graph.zoomOffset || 0) * xRange;
+                const newOffset = currentOffset + panDelta;
+                graph.zoomOffset = Math.max(0, Math.min(1 - 1/zoomLevel, (newOffset - xMin) / xRange));
+            } else {
+                graph.zoomOffset = Math.max(0, Math.min(xMax - visibleRange, (graph.zoomOffset || 0) + panDelta));
+            }
             this.panel.updateGraphSection(entityId, graphIndex, section);
         }
     }
@@ -1708,12 +1760,32 @@ export class GraphHandler {
             this.hidePointTooltipMulti(section);
             const tooltip = document.createElement('div');
             tooltip.className = 'point-tooltip';
+
+            // Format X value based on axis type
+            const isEntityBased = graph.xAxisType === 'entity';
+            const xDisplay = isEntityBased
+                ? `${coords.x.toFixed(1)}${graph.xAxisUnit || ''}`
+                : minutesToTime(Math.round(coords.x));
+
             tooltip.innerHTML = `
-                <span class="time">${minutesToTime(Math.round(coords.x))}</span>
+                <span class="time">${xDisplay}</span>
                 <span class="value">${coords.y.toFixed(1)}${unit}</span>
             `;
+
+            // Calculate position based on axis type
             const yRange = graph.maxY - graph.minY;
-            const xRatio = (coords.x - (graph.zoomOffset || 0)) / (1440 / (graph.zoomLevel || 1));
+            let xRatio;
+            if (isEntityBased) {
+                const xMin = graph.xAxisMin ?? 0;
+                const xMax = graph.xAxisMax ?? 100;
+                const xRange = xMax - xMin;
+                const zoomLevel = graph.zoomLevel || 1;
+                const visibleRange = xRange / zoomLevel;
+                const startX = xMin + (graph.zoomOffset || 0) * xRange;
+                xRatio = (coords.x - startX) / visibleRange;
+            } else {
+                xRatio = (coords.x - (graph.zoomOffset || 0)) / (1440 / (graph.zoomLevel || 1));
+            }
             const yRatio = 1 - (coords.y - graph.minY) / yRange;
             tooltip.style.left = `${Math.max(0, Math.min(1, xRatio)) * 100}%`;
             tooltip.style.top = `${Math.max(0, Math.min(1, yRatio)) * 100}%`;
@@ -1729,25 +1801,39 @@ export class GraphHandler {
             if (!graph) return null;
 
             const rect = graphContainer.getBoundingClientRect();
+            const isEntityBased = graph.xAxisType === 'entity';
             const zoomLevel = graph.zoomLevel || 1;
             const zoomOffset = graph.zoomOffset || 0;
-            const visibleMinutes = 1440 / zoomLevel;
-            const startMinute = zoomOffset;
+
+            let xMin, xMax, visibleRange, startX;
+            if (isEntityBased) {
+                xMin = graph.xAxisMin ?? 0;
+                xMax = graph.xAxisMax ?? 100;
+                const xRange = xMax - xMin;
+                visibleRange = xRange / zoomLevel;
+                startX = xMin + zoomOffset * xRange;
+            } else {
+                xMin = 0;
+                xMax = 1440;
+                visibleRange = 1440 / zoomLevel;
+                startX = zoomOffset;
+            }
+
             const yRange = graph.maxY - graph.minY;
 
-            const xSnap = graph.xSnap !== undefined ? graph.xSnap : this.panel.globalSnapMinutes;
+            const xSnap = graph.xSnap !== undefined ? graph.xSnap : (isEntityBased ? 0 : this.panel.globalSnapMinutes);
             const ySnap = graph.ySnap || 0;
 
             const xRatio = (touch.clientX - rect.left) / rect.width;
             const yRatio = 1 - (touch.clientY - rect.top) / rect.height;
 
-            let x = startMinute + xRatio * visibleMinutes;
+            let x = startX + xRatio * visibleRange;
             let y = graph.minY + yRatio * yRange;
 
             if (xSnap > 0) x = Math.round(x / xSnap) * xSnap;
             if (ySnap > 0) y = Math.round(y / ySnap) * ySnap;
 
-            x = Math.max(0, Math.min(1440, x));
+            x = Math.max(xMin, Math.min(xMax, x));
             y = Math.max(graph.minY, Math.min(graph.maxY, y));
 
             return { x, y };
@@ -1829,17 +1915,33 @@ export class GraphHandler {
                         }
                         const coords = getTouchCoords(touch);
                         if (coords) {
-                            const hasConflict = graph.points.some((p, i) => i !== dragPointIndex && Math.abs(p.x - coords.x) < 1);
+                            // Calculate tolerance based on X-axis type
+                            const isEntityBased = graph.xAxisType === 'entity';
+                            const xTolerance = isEntityBased
+                                ? ((graph.xAxisMax ?? 100) - (graph.xAxisMin ?? 0)) * 0.005
+                                : 1;
+                            const hasConflict = graph.points.some((p, i) => i !== dragPointIndex && Math.abs(p.x - coords.x) < xTolerance);
                             if (!hasConflict) {
                                 graph.points[dragPointIndex] = coords;
 
                                 // Move the point visually without full rerender to keep touch contact
                                 const rect = graphContainer.getBoundingClientRect();
                                 const zoomLevel = graph.zoomLevel || 1;
-                                const visibleMinutes = 1440 / zoomLevel;
-                                const startMinute = graph.zoomOffset || 0;
+
+                                let visibleRange, startX;
+                                if (isEntityBased) {
+                                    const xMin = graph.xAxisMin ?? 0;
+                                    const xMax = graph.xAxisMax ?? 100;
+                                    const xRange = xMax - xMin;
+                                    visibleRange = xRange / zoomLevel;
+                                    startX = xMin + (graph.zoomOffset || 0) * xRange;
+                                } else {
+                                    visibleRange = 1440 / zoomLevel;
+                                    startX = graph.zoomOffset || 0;
+                                }
+
                                 const yRange = graph.maxY - graph.minY;
-                                const xRatio = (coords.x - startMinute) / visibleMinutes;
+                                const xRatio = (coords.x - startX) / visibleRange;
                                 const yRatio = 1 - (coords.y - graph.minY) / yRange;
                                 touchedPoint.style.left = `${Math.max(0, Math.min(1, xRatio)) * 100}%`;
                                 touchedPoint.style.top = `${Math.max(0, Math.min(1, yRatio)) * 100}%`;
@@ -1855,8 +1957,22 @@ export class GraphHandler {
                             isPanning = true;
                             const rect = graphContainer.getBoundingClientRect();
                             const deltaX = lastTouchX - touch.clientX;
-                            const minutesPerPixel = (1440 / zoomLevel) / rect.width;
-                            graph.zoomOffset = Math.max(0, Math.min(1440 - 1440 / zoomLevel, (graph.zoomOffset || 0) + deltaX * minutesPerPixel));
+
+                            // Calculate pan based on X-axis type
+                            const isEntityBased = graph.xAxisType === 'entity';
+                            if (isEntityBased) {
+                                const xMin = graph.xAxisMin ?? 0;
+                                const xMax = graph.xAxisMax ?? 100;
+                                const xRange = xMax - xMin;
+                                const visibleRange = xRange / zoomLevel;
+                                const unitsPerPixel = visibleRange / rect.width;
+                                const currentOffset = (graph.zoomOffset || 0) * xRange;
+                                const newOffset = currentOffset + deltaX * unitsPerPixel;
+                                graph.zoomOffset = Math.max(0, Math.min(1 - 1/zoomLevel, newOffset / xRange));
+                            } else {
+                                const minutesPerPixel = (1440 / zoomLevel) / rect.width;
+                                graph.zoomOffset = Math.max(0, Math.min(1440 - 1440 / zoomLevel, (graph.zoomOffset || 0) + deltaX * minutesPerPixel));
+                            }
                             this.panel.updateGraphSection(entityId, graphIndex, section);
                         }
                     }
@@ -1872,12 +1988,19 @@ export class GraphHandler {
 
                 if (lastTouchDistance > 0) {
                     const scale = distance / lastTouchDistance;
+                    const isEntityBased = graph.xAxisType === 'entity';
+
                     if (scale > 1.1 && zoomLevel < 96) {
                         graph.zoomLevel = zoomLevel * 2;
                         this.panel.updateGraphSection(entityId, graphIndex, section);
                     } else if (scale < 0.9 && zoomLevel > 1) {
                         graph.zoomLevel = zoomLevel / 2;
-                        graph.zoomOffset = Math.max(0, Math.min((graph.zoomOffset || 0), 1440 - 1440 / graph.zoomLevel));
+                        // Clamp zoom offset based on axis type
+                        if (isEntityBased) {
+                            graph.zoomOffset = Math.max(0, Math.min((graph.zoomOffset || 0), 1 - 1 / graph.zoomLevel));
+                        } else {
+                            graph.zoomOffset = Math.max(0, Math.min((graph.zoomOffset || 0), 1440 - 1440 / graph.zoomLevel));
+                        }
                         this.panel.updateGraphSection(entityId, graphIndex, section);
                     }
                 }
@@ -1903,7 +2026,12 @@ export class GraphHandler {
                     this.panel.saveUndoState(entityId);
                     const coords = getTouchCoords(touch);
                     if (coords) {
-                        const existingIndex = graph.points.findIndex(p => Math.abs(p.x - coords.x) < 1);
+                        // Calculate tolerance based on X-axis type
+                        const isEntityBased = graph.xAxisType === 'entity';
+                        const xTolerance = isEntityBased
+                            ? ((graph.xAxisMax ?? 100) - (graph.xAxisMin ?? 0)) * 0.005
+                            : 1;
+                        const existingIndex = graph.points.findIndex(p => Math.abs(p.x - coords.x) < xTolerance);
                         if (existingIndex === -1) {
                             graph.points.push(coords);
                             graph.points.sort((a, b) => a.x - b.x);
@@ -1952,6 +2080,7 @@ export class GraphHandler {
 
     /**
      * Handle mouse move hover effects for multi-graph mode
+     * Supports both time-based and entity-based X-axis
      */
     handleGraphMouseMoveMulti(e, entityId, graphIndex, section) {
         if (e.target.classList.contains('point') || e.buttons !== 0) {
@@ -1967,17 +2096,32 @@ export class GraphHandler {
         if (!graphContainer) return;
         const rect = graphContainer.getBoundingClientRect();
 
+        // Calculate visible range based on X-axis type
+        const isEntityBased = graph.xAxisType === 'entity';
         const zoomLevel = graph.zoomLevel || 1;
         const zoomOffset = graph.zoomOffset || 0;
-        const visibleMinutes = 1440 / zoomLevel;
-        const startMinute = zoomOffset;
+
+        let xMin, xMax, visibleRange, startX;
+        if (isEntityBased) {
+            xMin = graph.xAxisMin ?? 0;
+            xMax = graph.xAxisMax ?? 100;
+            const xRange = xMax - xMin;
+            visibleRange = xRange / zoomLevel;
+            startX = xMin + zoomOffset * xRange;
+        } else {
+            xMin = 0;
+            xMax = 1440;
+            visibleRange = 1440 / zoomLevel;
+            startX = zoomOffset;
+        }
+
         const yRange = graph.maxY - graph.minY;
         const unit = graph.unit || '';
 
         const xRatio = (e.clientX - rect.left) / rect.width;
-        const xMinutes = startMinute + xRatio * visibleMinutes;
+        const xValue = startX + xRatio * visibleRange;
 
-        const yValue = interpolateValue(xMinutes, graph.points, graph.mode, graph.minY, graph.maxY);
+        const yValue = interpolateValue(xValue, graph.points, graph.mode, graph.minY, graph.maxY);
 
         const xPercent = xRatio * 100;
         const yPercent = (1 - (yValue - graph.minY) / yRange) * 100;
@@ -1995,10 +2139,15 @@ export class GraphHandler {
         hoverDot.style.top = `${yPercent}%`;
         graphContainer.appendChild(hoverDot);
 
+        // Format X value based on axis type
+        const xDisplay = isEntityBased
+            ? `${xValue.toFixed(1)}${graph.xAxisUnit || ''}`
+            : minutesToTime(Math.round(xValue));
+
         const tooltip = document.createElement('div');
         tooltip.className = 'curve-tooltip';
         tooltip.innerHTML = `
-            <span class="time">${minutesToTime(Math.round(xMinutes))}</span>
+            <span class="time">${xDisplay}</span>
             <span class="value">${yValue.toFixed(1)}${unit}</span>
         `;
         tooltip.style.left = `${xPercent}%`;
