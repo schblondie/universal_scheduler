@@ -138,6 +138,9 @@ export function saveScheduler(hass, entityId, scheduler) {
         step_to_zero: graph.stepToZero || false,
         x_axis_type: graph.xAxisType || 'time',
         x_axis_entity: graph.xAxisEntity || null,
+        x_axis_min: graph.xAxisMin ?? null,
+        x_axis_max: graph.xAxisMax ?? null,
+        x_axis_unit: graph.xAxisUnit || null,
         points: graph.points || []
     }));
 
@@ -190,6 +193,18 @@ export function loadSchedulersFromHA(hass, getEntityInfo) {
                 const attr = graph.attribute;
                 const graphUnit = attr ? getAttributeUnit(attr, '') : (info.unit || '');
 
+                // Determine X-axis range for default points
+                const xAxisType = graph.x_axis_type || 'time';
+                const isEntityBased = xAxisType === 'entity';
+                const xMin = isEntityBased ? (graph.x_axis_min ?? 0) : 0;
+                const xMax = isEntityBased ? (graph.x_axis_max ?? 100) : 1440;
+
+                // Create default points based on X-axis type
+                const defaultPoints = [
+                    { x: xMin, y: info.minY },
+                    { x: xMax, y: info.minY }
+                ];
+
                 return {
                 id: graph.id || `graph_${index + 1}`,
                 label: graph.label || `Schedule ${index + 1}`,
@@ -202,9 +217,12 @@ export function loadSchedulersFromHA(hass, getEntityInfo) {
                     xSnap: xSnapRaw === null || xSnapRaw === undefined ? undefined : Number(xSnapRaw),
                     ySnap: ySnapRaw === undefined ? 0 : Number(ySnapRaw),
                 stepToZero: graph.step_to_zero ?? false,
-                xAxisType: graph.x_axis_type || 'time',
+                xAxisType: xAxisType,
                 xAxisEntity: graph.x_axis_entity || null,
-                points: graph.points || [{ x: 0, y: info.minY }, { x: 1440, y: info.minY }],
+                xAxisMin: graph.x_axis_min ?? null,
+                xAxisMax: graph.x_axis_max ?? null,
+                xAxisUnit: graph.x_axis_unit || '',
+                points: graph.points || defaultPoints,
                 unit: graphUnit,
                 // UI state (not persisted)
                 zoomLevel: 1,

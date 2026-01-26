@@ -247,6 +247,32 @@ export function createGraphHTML(graph, graphIndex, scheduler) {
                     </button>
                 </div>
 
+                <div class="graph-settings x-axis-settings">
+                    <div class="input-group">
+                        <label>X-Axis</label>
+                        <select data-graph-setting="xAxisType">
+                            <option value="time" ${(graph.xAxisType || 'time') === 'time' ? 'selected' : ''}>Time (24h)</option>
+                            <option value="entity" ${graph.xAxisType === 'entity' ? 'selected' : ''}>Entity Value</option>
+                        </select>
+                    </div>
+                    <div class="input-group x-axis-entity-group" style="display: ${graph.xAxisType === 'entity' ? 'flex' : 'none'};">
+                        <label>X Entity</label>
+                        <input type="text" data-graph-setting="xAxisEntity" value="${graph.xAxisEntity || ''}" placeholder="sensor.lux" style="width: 140px;">
+                    </div>
+                    <div class="input-group x-axis-min-group" style="display: ${graph.xAxisType === 'entity' ? 'flex' : 'none'};">
+                        <label>X-Min</label>
+                        <input type="number" data-graph-setting="xAxisMin" value="${graph.xAxisMin ?? 0}" style="width: 70px;">
+                    </div>
+                    <div class="input-group x-axis-max-group" style="display: ${graph.xAxisType === 'entity' ? 'flex' : 'none'};">
+                        <label>X-Max</label>
+                        <input type="number" data-graph-setting="xAxisMax" value="${graph.xAxisMax ?? 100}" style="width: 70px;">
+                    </div>
+                    <div class="input-group x-axis-unit-group" style="display: ${graph.xAxisType === 'entity' ? 'flex' : 'none'};">
+                        <label>X Unit</label>
+                        <input type="text" data-graph-setting="xAxisUnit" value="${graph.xAxisUnit || ''}" placeholder="lx" style="width: 50px;">
+                    </div>
+                </div>
+
                 <div class="graph-wrapper">
                     <div class="graph-y-axis"></div>
                     <div class="graph-container" data-graph>
@@ -311,7 +337,8 @@ export function createGraphHTML(graph, graphIndex, scheduler) {
                             <!-- Points will be rendered dynamically -->
                         </div>
                         <div class="add-point-row">
-                            <input type="text" data-new-point-time placeholder="Time (HH:MM)" style="width: 80px;">
+                            <input type="text" data-new-point-time placeholder="Time (HH:MM)" style="width: 80px; display: ${graph.xAxisType === 'entity' ? 'none' : 'inline-block'};">
+                            <input type="number" data-new-point-x placeholder="X Value" style="width: 80px; display: ${graph.xAxisType === 'entity' ? 'inline-block' : 'none'};">
                             <input type="number" data-new-point-value placeholder="Value" style="width: 70px;">
                             <button class="secondary" data-action="addPoint">
                                 <ha-icon icon="mdi:plus"></ha-icon> Add
