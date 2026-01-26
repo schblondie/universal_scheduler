@@ -138,6 +138,9 @@ export function saveScheduler(hass, entityId, scheduler) {
         step_to_zero: graph.stepToZero || false,
         x_axis_type: graph.xAxisType || 'time',
         x_axis_entity: graph.xAxisEntity || null,
+        x_axis_min: graph.xAxisMin ?? null,
+        x_axis_max: graph.xAxisMax ?? null,
+        x_axis_unit: graph.xAxisUnit || null,
         points: graph.points || []
     }));
 
@@ -204,6 +207,9 @@ export function loadSchedulersFromHA(hass, getEntityInfo) {
                 stepToZero: graph.step_to_zero ?? false,
                 xAxisType: graph.x_axis_type || 'time',
                 xAxisEntity: graph.x_axis_entity || null,
+                xAxisMin: graph.x_axis_min ?? null,
+                xAxisMax: graph.x_axis_max ?? null,
+                xAxisUnit: graph.x_axis_unit || '',
                 points: graph.points || [{ x: 0, y: info.minY }, { x: 1440, y: info.minY }],
                 unit: graphUnit,
                 // UI state (not persisted)

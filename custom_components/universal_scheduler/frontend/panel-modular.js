@@ -79,6 +79,7 @@ class UniversalSchedulerPanel extends HTMLElement {
     }
 
     set hass(hass) {
+        const oldHass = this._hass;
         this._hass = hass;
         if (!this._initialized) {
             this.init();
@@ -87,6 +88,11 @@ class UniversalSchedulerPanel extends HTMLElement {
         if (this._initialized && this._root && !this._hasLoadedSchedulers) {
             this._hasLoadedSchedulers = true;
             this.loadSchedulersFromHA();
+        }
+
+        // Check for entity state changes (for entity-based X-axis graphs)
+        if (oldHass && hass && this._entitySubscriptions) {
+            this._handleEntityStateChanges();
         }
     }
 
@@ -408,7 +414,6 @@ class UniversalSchedulerPanel extends HTMLElement {
             graphs: [defaultGraph],
         };
         console.log(`Scheduler created: ${this.schedulers[entityId].entityId} (${this.schedulers[entityId].domain})`);
-        this.closeCreateModal();
         this.renderSchedulers();
     }
 
@@ -917,6 +922,90 @@ class UniversalSchedulerPanel extends HTMLElement {
             this.graphHandler.renderGraphSection(entityId, graphIndex, section);
         });
 
+        // X-axis type change handler
+        section.querySelector('[data-graph-setting="xAxisType"]')?.addEventListener('change', (e) => {
+            this.saveUndoState(entityId);
+            const graph = getGraph();
+            graph.xAxisType = e.target.value;
+
+            // Show/hide entity-based X-axis settings
+            const showEntity = graph.xAxisType === 'entity';
+            section.querySelector('.x-axis-entity-group').style.display = showEntity ? 'flex' : 'none';
+            section.querySelector('.x-axis-min-group').style.display = showEntity ? 'flex' : 'none';
+            section.querySelector('.x-axis-max-group').style.display = showEntity ? 'flex' : 'none';
+            section.querySelector('.x-axis-unit-group').style.display = showEntity ? 'flex' : 'none';
+
+            // Toggle add-point input visibility
+            const timeInput = section.querySelector('[data-new-point-time]');
+            const xInput = section.querySelector('[data-new-point-x]');
+            if (timeInput) timeInput.style.display = showEntity ? 'none' : 'inline-block';
+            if (xInput) xInput.style.display = showEntity ? 'inline-block' : 'none';
+
+            // Re-render the graph with appropriate axis
+            this.updateGraphSection(entityId, graphIndex, section);
+
+            // Re-render the points list with correct input types
+            this.graphHandler.renderPointsListMulti(entityId, graphIndex, section);
+
+            // Subscribe to entity state changes if entity-based
+            if (showEntity && graph.xAxisEntity) {
+                this._subscribeToEntityChanges(entityId, graphIndex, section, graph.xAxisEntity);
+            }
+        });
+
+        // X-axis entity input handler
+        section.querySelector('[data-graph-setting="xAxisEntity"]')?.addEventListener('change', (e) => {
+            this.saveUndoState(entityId);
+            const graph = getGraph();
+            graph.xAxisEntity = e.target.value || null;
+
+            // Try to auto-detect min/max from entity attributes
+            if (graph.xAxisEntity && this._hass?.states[graph.xAxisEntity]) {
+                const entityState = this._hass.states[graph.xAxisEntity];
+                const attrs = entityState.attributes || {};
+
+                // Auto-fill min/max if available
+                if (attrs.min !== undefined) {
+                    graph.xAxisMin = attrs.min;
+                    section.querySelector('[data-graph-setting="xAxisMin"]').value = attrs.min;
+                }
+                if (attrs.max !== undefined) {
+                    graph.xAxisMax = attrs.max;
+                    section.querySelector('[data-graph-setting="xAxisMax"]').value = attrs.max;
+                }
+                if (attrs.unit_of_measurement) {
+                    graph.xAxisUnit = attrs.unit_of_measurement;
+                    section.querySelector('[data-graph-setting="xAxisUnit"]').value = attrs.unit_of_measurement;
+                }
+            }
+
+            this.updateGraphSection(entityId, graphIndex, section);
+
+            // Subscribe to entity state changes
+            if (graph.xAxisEntity) {
+                this._subscribeToEntityChanges(entityId, graphIndex, section, graph.xAxisEntity);
+            }
+        });
+
+        // X-axis min/max/unit handlers
+        section.querySelector('[data-graph-setting="xAxisMin"]')?.addEventListener('change', (e) => {
+            this.saveUndoState(entityId);
+            getGraph().xAxisMin = parseFloat(e.target.value);
+            this.updateGraphSection(entityId, graphIndex, section);
+        });
+
+        section.querySelector('[data-graph-setting="xAxisMax"]')?.addEventListener('change', (e) => {
+            this.saveUndoState(entityId);
+            getGraph().xAxisMax = parseFloat(e.target.value);
+            this.updateGraphSection(entityId, graphIndex, section);
+        });
+
+        section.querySelector('[data-graph-setting="xAxisUnit"]')?.addEventListener('change', (e) => {
+            this.saveUndoState(entityId);
+            getGraph().xAxisUnit = e.target.value || '';
+            this.updateGraphSection(entityId, graphIndex, section);
+        });
+
         // Delete graph button
         section.querySelector('[data-action="deleteGraph"]')?.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -1077,6 +1166,27 @@ class UniversalSchedulerPanel extends HTMLElement {
                     }
                 }
 
+                // Handle entity-based X-axis point editing
+                if (e.target.matches('[data-point-x]')) {
+                    const xValue = parseFloat(e.target.value);
+                    const xMin = graph.xAxisMin ?? 0;
+                    const xMax = graph.xAxisMax ?? 100;
+                    const xTolerance = (xMax - xMin) * 0.005;
+
+                    if (!isNaN(xValue) && xValue >= xMin && xValue <= xMax) {
+                        const hasConflict = graph.points.some((p, i) => i !== pointIndex && Math.abs(p.x - xValue) < xTolerance);
+                        if (!hasConflict) {
+                            this.saveUndoState(entityId);
+                            graph.points[pointIndex].x = xValue;
+                            this.graphHandler.renderGraphSection(entityId, graphIndex, section);
+                        } else {
+                            e.target.value = graph.points[pointIndex].x.toFixed(2);
+                        }
+                    } else {
+                        e.target.value = graph.points[pointIndex].x.toFixed(2);
+                    }
+                }
+
                 if (e.target.matches('[data-point-value]')) {
                     let value = parseFloat(e.target.value);
                     if (!isNaN(value)) {
@@ -1114,34 +1224,62 @@ class UniversalSchedulerPanel extends HTMLElement {
         section.querySelector('[data-action="addPoint"]')?.addEventListener('click', (e) => {
             e.stopPropagation();
             const graph = getGraph();
-            const timeInput = section.querySelector('[data-new-point-time]');
-            const valueInput = section.querySelector('[data-new-point-value]');
+            const isEntityBased = graph.xAxisType === 'entity';
 
-            const mins = timeToMinutes(timeInput.value);
-            let value = parseFloat(valueInput.value);
+            let xValue;
+            let xTolerance;
 
-            if (mins === null || mins < 0 || mins > 1440) {
-                alert('Invalid time format. Use HH:MM (e.g., 14:30)');
-                return;
+            if (isEntityBased) {
+                // Entity-based X-axis
+                const xInput = section.querySelector('[data-new-point-x]');
+                xValue = parseFloat(xInput?.value);
+                const xMin = graph.xAxisMin ?? 0;
+                const xMax = graph.xAxisMax ?? 100;
+                xTolerance = (xMax - xMin) * 0.005;
+
+                if (isNaN(xValue) || xValue < xMin || xValue > xMax) {
+                    alert(`Invalid X value. Must be between ${xMin} and ${xMax}`);
+                    return;
+                }
+            } else {
+                // Time-based X-axis
+                const timeInput = section.querySelector('[data-new-point-time]');
+                xValue = timeToMinutes(timeInput?.value);
+                xTolerance = 1;
+
+                if (xValue === null || xValue < 0 || xValue > 1440) {
+                    alert('Invalid time format. Use HH:MM (e.g., 14:30)');
+                    return;
+                }
             }
 
-            if (isNaN(value)) {
+            const valueInput = section.querySelector('[data-new-point-value]');
+            let yValue = parseFloat(valueInput?.value);
+
+            if (isNaN(yValue)) {
                 alert('Invalid value');
                 return;
             }
 
-            value = Math.max(graph.minY, Math.min(graph.maxY, value));
+            yValue = Math.max(graph.minY, Math.min(graph.maxY, yValue));
             this.saveUndoState(entityId);
 
-            const existingIndex = graph.points.findIndex(p => Math.abs(p.x - mins) < 1);
+            const existingIndex = graph.points.findIndex(p => Math.abs(p.x - xValue) < xTolerance);
             if (existingIndex !== -1) {
-                graph.points[existingIndex].y = value;
+                graph.points[existingIndex].y = yValue;
             } else {
-                graph.points.push({ x: mins, y: value });
+                graph.points.push({ x: xValue, y: yValue });
             }
 
-            timeInput.value = '';
-            valueInput.value = '';
+            // Clear inputs
+            if (isEntityBased) {
+                const xInput = section.querySelector('[data-new-point-x]');
+                if (xInput) xInput.value = '';
+            } else {
+                const timeInput = section.querySelector('[data-new-point-time]');
+                if (timeInput) timeInput.value = '';
+            }
+            if (valueInput) valueInput.value = '';
 
             this.graphHandler.renderGraphSection(entityId, graphIndex, section);
             this.graphHandler.renderPointsListMulti(entityId, graphIndex, section);
@@ -1639,6 +1777,186 @@ class UniversalSchedulerPanel extends HTMLElement {
         const graphHeight = this._root.querySelector('#graphHeight');
         if (graphHeight) {
             graphHeight.value = this.graphHeight.toString();
+        }
+    }
+
+    // ============ Entity State Change Subscription ============
+
+    /**
+     * Subscribe to entity state changes for entity-based X-axis graphs
+     * When the X-axis entity changes, immediately update the graph and apply the value
+     */
+    _subscribeToEntityChanges(schedulerEntityId, graphIndex, section, xAxisEntity) {
+        if (!this._hass || !xAxisEntity) return;
+
+        // Create subscription key
+        const subKey = `${schedulerEntityId}_${graphIndex}_${xAxisEntity}`;
+
+        // Initialize subscriptions map if not exists
+        if (!this._entitySubscriptions) {
+            this._entitySubscriptions = new Map();
+        }
+
+        // Avoid duplicate subscriptions
+        if (this._entitySubscriptions.has(subKey)) {
+            return;
+        }
+
+        // Store subscription info
+        this._entitySubscriptions.set(subKey, {
+            schedulerEntityId,
+            graphIndex,
+            xAxisEntity,
+            lastValue: null
+        });
+
+        console.log(`Subscribed to entity changes: ${xAxisEntity} for graph ${graphIndex} of ${schedulerEntityId}`);
+    }
+
+    /**
+     * Handle entity state changes (called when hass object is updated)
+     * This is called periodically when Home Assistant state changes
+     */
+    _handleEntityStateChanges() {
+        if (!this._entitySubscriptions || !this._hass) return;
+
+        this._entitySubscriptions.forEach((sub, key) => {
+            const entityState = this._hass.states?.[sub.xAxisEntity];
+            if (!entityState) return;
+
+            const currentValue = parseFloat(entityState.state);
+            if (isNaN(currentValue)) return;
+
+            // Check if value changed
+            if (sub.lastValue !== null && Math.abs(currentValue - sub.lastValue) > 0.001) {
+                // Value changed - update the graph and potentially apply
+                const scheduler = this.schedulers[sub.schedulerEntityId];
+                if (scheduler && scheduler.graphs?.[sub.graphIndex]) {
+                    const graph = scheduler.graphs[sub.graphIndex];
+
+                    // Only process if this is an entity-based graph
+                    if (graph.xAxisType === 'entity' && graph.xAxisEntity === sub.xAxisEntity) {
+                        const section = this._root.querySelector(
+                            `[data-entity="${sub.schedulerEntityId}"] [data-graph-index="${sub.graphIndex}"]`
+                        );
+
+                        if (section && !section.classList.contains('collapsed')) {
+                            // Update the graph display
+                            this.graphHandler.updateCurrentTimeMarkerMulti(section, graph, this._hass);
+                            this.graphHandler.updateCurrentValueMulti(sub.schedulerEntityId, sub.graphIndex, section);
+                        }
+
+                        // Apply the scheduler value if enabled
+                        if (scheduler.enabled) {
+                            this._applyEntityBasedScheduler(sub.schedulerEntityId, sub.graphIndex, currentValue);
+                        }
+                    }
+                }
+            }
+
+            // Update last known value
+            sub.lastValue = currentValue;
+        });
+    }
+
+    /**
+     * Apply scheduler value for entity-based X-axis when the X entity changes
+     */
+    async _applyEntityBasedScheduler(schedulerEntityId, graphIndex, xValue) {
+        const scheduler = this.schedulers[schedulerEntityId];
+        if (!scheduler || !scheduler.enabled) return;
+
+        const graph = scheduler.graphs?.[graphIndex];
+        if (!graph || graph.xAxisType !== 'entity') return;
+
+        const { interpolateValue, interpolateValueWithStepToMin } = await import('./utils.js');
+
+        // Clamp X value to bounds
+        const xMin = graph.xAxisMin ?? 0;
+        const xMax = graph.xAxisMax ?? 100;
+        const clampedX = Math.max(xMin, Math.min(xMax, xValue));
+
+        // Get interpolated Y value at current X position
+        const yValue = graph.stepToZero
+            ? interpolateValueWithStepToMin(clampedX, graph.points, graph.mode, graph.minY, graph.maxY)
+            : interpolateValue(clampedX, graph.points, graph.mode, graph.minY, graph.maxY);
+
+        console.log(`Entity-based apply: X=${clampedX} -> Y=${yValue} for ${schedulerEntityId}`);
+
+        // Call the backend to apply the value
+        try {
+            await this._hass.callService('universal_scheduler', 'apply_entity_value', {
+                entity_id: schedulerEntityId,
+                graph_index: graphIndex,
+                x_value: clampedX,
+                y_value: yValue
+            });
+        } catch (err) {
+            console.warn('Failed to apply entity-based value:', err);
+            // Fall back to direct service call based on domain
+            await this._applyValueDirectly(scheduler, graph, yValue);
+        }
+    }
+
+    /**
+     * Directly apply a value to the target entity (fallback)
+     */
+    async _applyValueDirectly(scheduler, graph, value) {
+        const targetEntity = scheduler.entityId;
+        const domain = scheduler.domain;
+
+        try {
+            switch (domain) {
+                case 'light':
+                    if (value > 0) {
+                        await this._hass.callService('light', 'turn_on', {
+                            entity_id: targetEntity,
+                            brightness: Math.round((value / 100) * 255),
+                            transition: 2
+                        });
+                    } else {
+                        await this._hass.callService('light', 'turn_off', {
+                            entity_id: targetEntity,
+                            transition: 2
+                        });
+                    }
+                    break;
+                case 'climate':
+                    await this._hass.callService('climate', 'set_temperature', {
+                        entity_id: targetEntity,
+                        temperature: Math.round(value * 10) / 10
+                    });
+                    break;
+                case 'fan':
+                    if (value > 0) {
+                        await this._hass.callService('fan', 'set_percentage', {
+                            entity_id: targetEntity,
+                            percentage: Math.round(value)
+                        });
+                    } else {
+                        await this._hass.callService('fan', 'turn_off', {
+                            entity_id: targetEntity
+                        });
+                    }
+                    break;
+                case 'cover':
+                    await this._hass.callService('cover', 'set_cover_position', {
+                        entity_id: targetEntity,
+                        position: Math.round(value)
+                    });
+                    break;
+                case 'input_number':
+                case 'number':
+                    await this._hass.callService('input_number', 'set_value', {
+                        entity_id: targetEntity,
+                        value: Math.round(value * 100) / 100
+                    });
+                    break;
+                default:
+                    console.warn('Unknown domain for apply:', domain);
+            }
+        } catch (err) {
+            console.error('Failed to apply value directly:', err);
         }
     }
 }
