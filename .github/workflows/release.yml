@@ -1,0 +1,88 @@
+name: Create Release for HACS
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get latest tag
+        id: get_tag
+        run: |
+          # Get the latest tag or default to v0.0.0
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          echo "latest_tag=$LATEST_TAG" >> $GITHUB_OUTPUT
+          
+          # Check if PR title contains a version tag
+          PR_TAG=$(echo "${{ github.event.head_commit.message }}" | grep -oP 'v\d+\.\d+\.\d+' | head -n1)
+          
+          if [ -n "$PR_TAG" ]; then
+            NEW_TAG=$PR_TAG
+          else
+            # Extract version parts
+            VERSION=${LATEST_TAG#v}
+            MAJOR=$(echo $VERSION | cut -d. -f1)
+            MINOR=$(echo $VERSION | cut -d. -f2)
+            PATCH=$(echo $VERSION | cut -d. -f3)
+            
+            # Increment patch version
+            PATCH=$((PATCH + 1))
+            NEW_TAG="v$MAJOR.$MINOR.$PATCH"
+          fi
+          
+          echo "new_tag=$NEW_TAG" >> $GITHUB_OUTPUT
+          echo "Creating release with tag: $NEW_TAG"
+
+      - name: Create and push tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag ${{ steps.get_tag.outputs.new_tag }}
+          git push origin ${{ steps.get_tag.outputs.new_tag }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create release archive
+        run: |
+          mkdir -p release/universal_scheduler/frontend
+          
+          # Copy necessary Python files
+          cp custom_components/universal_scheduler/*.py release/universal_scheduler/
+          cp custom_components/universal_scheduler/*.json release/universal_scheduler/
+          cp custom_components/universal_scheduler/*.yaml release/universal_scheduler/
+          cp custom_components/universal_scheduler/README.md release/universal_scheduler/ 2>/dev/null || true
+          
+          # Copy only necessary JS files
+          cp custom_components/universal_scheduler/frontend/card.js release/universal_scheduler/frontend/
+          cp custom_components/universal_scheduler/frontend/panel.js release/universal_scheduler/frontend/
+          
+          # Create zip archive
+          cd release
+          zip -r universal_scheduler.zip universal_scheduler
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.get_tag.outputs.new_tag }}
+          name: Release ${{ steps.get_tag.outputs.new_tag }}
+          body: |
+            Release ${{ steps.get_tag.outputs.new_tag }}
+            
+            ## Installation
+            
+            Download the `universal_scheduler.zip` file and extract it to your Home Assistant `custom_components` directory.
+          files: |
+            release/universal_scheduler.zip
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
