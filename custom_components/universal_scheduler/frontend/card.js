@@ -2207,6 +2207,24 @@ const CARD_STYLES = `
         font-weight: 500;
     }
 
+    .scheduler-card-header .delete-btn {
+        background: none;
+        border: none;
+        padding: 4px;
+        margin: 0;
+        cursor: pointer;
+        color: var(--secondary-text-color);
+        opacity: 0.7;
+        transition: opacity 0.2s, color 0.2s;
+        display: flex;
+        align-items: center;
+    }
+
+    .scheduler-card-header .delete-btn:hover {
+        opacity: 1;
+        color: var(--error-color, #db4437);
+    }
+
     .scheduler-card-header .state {
         font-size: 0.85rem;
         padding: 4px 10px;
@@ -2734,12 +2752,67 @@ const CARD_STYLES = `
     .no-scheduler {
         text-align: center;
         padding: 30px 20px;
-        opacity: 0.6;
     }
 
     .no-scheduler ha-icon {
         font-size: 48px;
         margin-bottom: 10px;
+        opacity: 0.6;
+    }
+
+    .no-scheduler p {
+        opacity: 0.6;
+    }
+
+    .no-scheduler .add-schedule-btn {
+        margin-top: 16px;
+        padding: 10px 20px;
+        border-radius: 8px;
+        border: 2px dashed var(--primary-color, #03a9f4);
+        background: transparent;
+        color: var(--primary-color, #03a9f4);
+        font-size: 0.95rem;
+        cursor: pointer;
+        transition: all 0.2s;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        opacity: 1;
+    }
+
+    .no-scheduler .add-schedule-btn:hover {
+        background: rgba(var(--rgb-primary-color, 3, 169, 244), 0.1);
+        border-style: solid;
+    }
+
+    .no-scheduler .add-schedule-btn ha-icon {
+        font-size: 20px;
+        --mdc-icon-size: 20px;
+        opacity: 1;
+    }
+
+    /* Delete scheduler button */
+    .delete-scheduler-btn {
+        padding: 4px 10px;
+        border-radius: 4px;
+        border: 1px solid var(--error-color, #db4437);
+        background: transparent;
+        color: var(--error-color, #db4437);
+        font-size: 0.75rem;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        margin-left: auto;
+    }
+
+    .delete-scheduler-btn:hover {
+        background: var(--error-color, #db4437);
+        color: white;
+    }
+
+    .delete-scheduler-btn ha-icon {
+        --mdc-icon-size: 14px;
     }
 
     /* Tooltip */
@@ -2858,6 +2931,9 @@ class UniversalSchedulerCardEditor extends HTMLElement {
     async _loadSchedulers() {
         if (!this._hass) return;
 
+        // Build a set of entities that already have schedulers
+        let schedulerEntityIds = new Set();
+
         try {
             // Load schedulers from WebSocket API
             const result = await this._hass.callWS({
@@ -2865,32 +2941,41 @@ class UniversalSchedulerCardEditor extends HTMLElement {
             });
 
             const schedulers = result.schedulers || {};
-            this._schedulers = Object.entries(schedulers).map(([entityId, data]) => ({
-                entityId: entityId,
-                switchEntity: `switch.universal_scheduler_${entityId.replace(/\./g, '_')}`,
-                name: data.name || entityId,
-                domain: data.domain || entityId.split('.')[0]
-            }));
-
-            this._filteredSchedulers = [...this._schedulers];
-            this._render();
+            schedulerEntityIds = new Set(Object.keys(schedulers));
         } catch (e) {
             console.error('Failed to load schedulers:', e);
             // Fallback: try to find from switch entities
-            this._schedulers = Object.keys(this._hass.states)
+            Object.keys(this._hass.states)
                 .filter(id => id.startsWith('switch.universal_scheduler_'))
-                .map(id => {
-                    const state = this._hass.states[id];
-                    return {
-                        entityId: id.replace('switch.universal_scheduler_', '').replace(/_/g, '.'),
-                        switchEntity: id,
-                        name: state?.attributes?.friendly_name || id,
-                        domain: 'unknown'
-                    };
+                .forEach(id => {
+                    schedulerEntityIds.add(id.replace('switch.universal_scheduler_', '').replace(/_/g, '.'));
                 });
-            this._filteredSchedulers = [...this._schedulers];
-            this._render();
         }
+
+        // Get all controllable entities from HA
+        const controllableEntities = Object.keys(this._hass.states)
+            .filter(entityId => {
+                const domain = entityId.split('.')[0];
+                return CONTROLLABLE_DOMAINS.includes(domain);
+            })
+            .sort();
+
+        // Create list of all entities, marking those with schedulers
+        this._schedulers = controllableEntities.map(entityId => {
+            const state = this._hass.states[entityId];
+            const domain = entityId.split('.')[0];
+            const hasScheduler = schedulerEntityIds.has(entityId);
+            return {
+                entityId: entityId,
+                switchEntity: hasScheduler ? `switch.universal_scheduler_${entityId.replace(/\./g, '_')}` : null,
+                name: state?.attributes?.friendly_name || entityId,
+                domain: domain,
+                hasScheduler: hasScheduler
+            };
+        });
+
+        this._filteredSchedulers = [...this._schedulers];
+        this._render();
     }
 
     _render() {
@@ -2983,6 +3068,17 @@ class UniversalSchedulerCardEditor extends HTMLElement {
                     --mdc-icon-size: 20px;
                     color: var(--primary-color);
                 }
+                .autocomplete-item.has-scheduler {
+                    background: rgba(var(--rgb-success-color, 76, 175, 80), 0.1);
+                }
+                .autocomplete-item .scheduler-badge {
+                    font-size: 0.7rem;
+                    padding: 2px 6px;
+                    border-radius: 8px;
+                    background: var(--success-color, #4caf50);
+                    color: white;
+                    white-space: nowrap;
+                }
                 .no-results {
                     padding: 12px;
                     text-align: center;
@@ -2992,14 +3088,14 @@ class UniversalSchedulerCardEditor extends HTMLElement {
             </style>
 
             <div class="editor-row">
-                <label>Scheduler Entity</label>
+                <label>Target Entity</label>
                 <div class="autocomplete-wrapper">
-                    <input type="text" id="entity-search" value="${currentValue}" placeholder="Search schedulers..." autocomplete="off">
+                    <input type="text" id="entity-search" value="${currentValue}" placeholder="Search entities..." autocomplete="off">
                     <div class="autocomplete-list" id="autocomplete-list">
                         ${this._renderAutocompleteItems()}
                     </div>
                 </div>
-                <span class="hint">Search and select which scheduler to display</span>
+                <span class="hint">Search and select an entity to schedule (entities with existing schedules are highlighted)</span>
             </div>
 
             <div class="editor-row">
@@ -3029,13 +3125,18 @@ class UniversalSchedulerCardEditor extends HTMLElement {
                 <label for="show_graph_settings">Show graph settings</label>
             </div>
 
+            <div class="editor-checkbox" style="margin-left: 48px; ${this._config.allow_edit === false || !this._config.show_graph_settings ? 'opacity: 0.5; pointer-events: none;' : ''}">
+                <input type="checkbox" id="allow_schedule_editing" ${this._config.allow_schedule_editing && this._config.allow_edit !== false && this._config.show_graph_settings ? 'checked' : ''} ${this._config.allow_edit === false || !this._config.show_graph_settings ? 'disabled' : ''}>
+                <label for="allow_schedule_editing">Allow editing of schedules</label>
+            </div>
+
             <div class="editor-checkbox" style="margin-left: 24px; ${this._config.allow_edit === false ? 'opacity: 0.5; pointer-events: none;' : ''}">
                 <input type="checkbox" id="show_points_editor" ${this._config.show_points_editor && this._config.allow_edit !== false ? 'checked' : ''} ${this._config.allow_edit === false ? 'disabled' : ''}>
                 <label for="show_points_editor">Show points editor</label>
             </div>
 
-            <div class="editor-checkbox">
-                <input type="checkbox" id="show_weekdays" ${this._config.show_weekdays !== false ? 'checked' : ''}>
+            <div class="editor-checkbox" style="margin-left: 24px; ${this._config.allow_edit === false ? 'opacity: 0.5; pointer-events: none;' : ''}">
+                <input type="checkbox" id="show_weekdays" ${this._config.show_weekdays && this._config.allow_edit !== false ? 'checked' : ''} ${this._config.allow_edit === false ? 'disabled' : ''}>
                 <label for="show_weekdays">Show weekday selector</label>
             </div>
 
@@ -3056,14 +3157,15 @@ class UniversalSchedulerCardEditor extends HTMLElement {
 
     _renderAutocompleteItems() {
         if (this._filteredSchedulers.length === 0) {
-            return '<div class="no-results">No schedulers found</div>';
+            return '<div class="no-results">No entities found</div>';
         }
 
         return this._filteredSchedulers.map(scheduler => `
-            <div class="autocomplete-item" data-entity="${scheduler.switchEntity}">
+            <div class="autocomplete-item ${scheduler.hasScheduler ? 'has-scheduler' : ''}" data-entity="${scheduler.entityId}" data-has-scheduler="${scheduler.hasScheduler}">
                 <ha-icon icon="${this._getDomainIcon(scheduler.domain)}"></ha-icon>
                 <span class="item-name">${scheduler.name}</span>
                 <span class="item-entity">${scheduler.entityId}</span>
+                ${scheduler.hasScheduler ? '<span class="scheduler-badge">Has Schedule</span>' : ''}
             </div>
         `).join('');
     }
@@ -3114,11 +3216,12 @@ class UniversalSchedulerCardEditor extends HTMLElement {
         autocompleteList.addEventListener('click', (e) => {
             const item = e.target.closest('.autocomplete-item');
             if (item) {
-                const entity = item.dataset.entity;
-                const scheduler = this._schedulers.find(s => s.switchEntity === entity);
+                const entityId = item.dataset.entity;
+                const scheduler = this._schedulers.find(s => s.entityId === entityId);
                 if (scheduler) {
                     searchInput.value = scheduler.name;
-                    this._valueChanged('entity', scheduler.switchEntity);
+                    // Store entityId directly - the card will handle creating/loading scheduler
+                    this._valueChanged('entity', entityId);
                 }
                 autocompleteList.classList.remove('show');
             }
@@ -3137,10 +3240,19 @@ class UniversalSchedulerCardEditor extends HTMLElement {
             if (!e.target.checked) {
                 this._valueChanged('show_graph_settings', false);
                 this._valueChanged('show_points_editor', false);
+                this._valueChanged('allow_schedule_editing', false);
             }
             this._render();
         });
-        this.querySelector('#show_graph_settings').addEventListener('change', (e) => this._valueChanged('show_graph_settings', e.target.checked));
+        this.querySelector('#show_graph_settings').addEventListener('change', (e) => {
+            this._valueChanged('show_graph_settings', e.target.checked);
+            // If disabling graph settings, also disable allow_schedule_editing
+            if (!e.target.checked) {
+                this._valueChanged('allow_schedule_editing', false);
+            }
+            this._render();
+        });
+        this.querySelector('#allow_schedule_editing').addEventListener('change', (e) => this._valueChanged('allow_schedule_editing', e.target.checked));
         this.querySelector('#show_points_editor').addEventListener('change', (e) => this._valueChanged('show_points_editor', e.target.checked));
         this.querySelector('#show_weekdays').addEventListener('change', (e) => this._valueChanged('show_weekdays', e.target.checked));
         this.querySelector('#show_current_value').addEventListener('change', (e) => this._valueChanged('show_current_value', e.target.checked));
@@ -3265,6 +3377,7 @@ class UniversalSchedulerCard extends HTMLElement {
     async _loadSchedulerData() {
         if (!this._hass || !this._config.entity) {
             this._scheduler = null;
+            this._targetEntity = null;
             this._render();
             return;
         }
@@ -3275,16 +3388,21 @@ class UniversalSchedulerCard extends HTMLElement {
                 type: 'universal_scheduler/get_schedulers'
             });
 
-            // Find the scheduler for our entity
-            const targetEntity = this._config.entity.replace('switch.universal_scheduler_', '').replace(/_/g, '.');
+            // Determine the target entity - could be entityId directly or switch entity format
+            let targetEntity = this._config.entity;
+            if (targetEntity.startsWith('switch.universal_scheduler_')) {
+                targetEntity = targetEntity.replace('switch.universal_scheduler_', '').replace(/_/g, '.');
+            }
+
+            // Store the target entity for creating new schedulers
+            this._targetEntity = targetEntity;
 
             const schedulers = result.schedulers || {};
 
             // Try to find by entity ID
             let scheduler = null;
             for (const [entityId, data] of Object.entries(schedulers)) {
-                if (entityId === targetEntity ||
-                    `switch.universal_scheduler_${entityId.replace(/\./g, '_')}` === this._config.entity) {
+                if (entityId === targetEntity) {
                     scheduler = this._transformSchedulerData(entityId, data);
                     break;
                 }
@@ -3446,11 +3564,26 @@ class UniversalSchedulerCard extends HTMLElement {
 
     _renderContent(showGraphSettings) {
         if (!this._scheduler) {
+            // Check if we have a target entity and user can add schedules
+            if (this._targetEntity && this._config.allow_schedule_editing && this._hass?.states[this._targetEntity]) {
+                const state = this._hass.states[this._targetEntity];
+                const friendlyName = state?.attributes?.friendly_name || this._targetEntity;
+                const domain = this._targetEntity.split('.')[0];
+                return `
+                    <div class="no-scheduler">
+                        <ha-icon icon="${this._getDomainIcon(domain)}"></ha-icon>
+                        <p>No schedule for ${friendlyName}</p>
+                        <button class="add-schedule-btn" data-action="createScheduler">
+                            <ha-icon icon="mdi:plus"></ha-icon> Create Schedule
+                        </button>
+                    </div>
+                `;
+            }
             return `
                 <div class="no-scheduler">
                     <ha-icon icon="mdi:calendar-clock"></ha-icon>
                     <p>No scheduler selected</p>
-                    <p style="font-size: 0.85rem;">Configure this card to select a scheduler</p>
+                    <p style="font-size: 0.85rem;">Configure this card to select an entity</p>
                 </div>
             `;
         }
@@ -3500,6 +3633,11 @@ class UniversalSchedulerCard extends HTMLElement {
                 <div class="scheduler-card-header">
                     <ha-icon class="entity-icon" icon="${this._getDomainIcon(this._scheduler.domain)}"></ha-icon>
                     <span class="title">${this._scheduler.name}</span>
+                    ${this._config.allow_schedule_editing ? `
+                        <button class="delete-btn" data-action="deleteScheduler" title="Delete schedule">
+                            <ha-icon icon="mdi:delete"></ha-icon>
+                        </button>
+                    ` : ''}
                     ${this._config.allow_toggle ? `
                         <div class="toggle-switch header-toggle ${this._scheduler.enabled ? 'active' : ''}" data-action="toggleScheduler" title="${this._scheduler.enabled ? 'Click to disable' : 'Click to enable'}"></div>
                     ` : `
@@ -3508,14 +3646,14 @@ class UniversalSchedulerCard extends HTMLElement {
                 </div>
             ` : ''}
 
-            ${graphs.length > 1 || (allowEdit && this._config.graph_index === undefined) ? `
+            ${graphs.length > 1 || (allowEdit && this._config.allow_schedule_editing && this._config.graph_index === undefined) ? `
                 <div class="graph-selector">
                     ${graphs.map((g, i) => `
                         <button class="graph-selector-btn ${i === graphIndex ? 'active' : ''}" data-index="${i}">
                             ${g.label}
                         </button>
                     `).join('')}
-                    ${allowEdit && this._config.graph_index === undefined ? `
+                    ${allowEdit && this._config.allow_schedule_editing && this._config.graph_index === undefined ? `
                         <button class="add-graph-btn" data-action="addGraph">
                             <ha-icon icon="mdi:plus"></ha-icon> Add
                         </button>
@@ -3593,6 +3731,14 @@ class UniversalSchedulerCard extends HTMLElement {
                     <span>Graph Settings</span>
                 </div>
                 <div class="card-graph-settings-body">
+                    ${this._config.allow_schedule_editing ? `
+                        <div class="card-graph-settings" style="margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--divider-color, rgba(0,0,0,0.12));">
+                            <div class="input-group" style="flex: 1;">
+                                <label>Label</label>
+                                <input type="text" data-setting="label" value="${graph.label || ''}" placeholder="Schedule name">
+                            </div>
+                        </div>
+                    ` : ''}
                     <div class="card-graph-settings">
                         <div class="input-group">
                             <label>Mode</label>
@@ -3680,7 +3826,7 @@ class UniversalSchedulerCard extends HTMLElement {
                         </div>
                         ${canDelete ? `
                             <button class="danger" data-action="deleteGraph" title="Delete this graph">
-                                <ha-icon icon="mdi:delete"></ha-icon> Delete
+                                <ha-icon icon="mdi:delete"></ha-icon> Delete Graph
                             </button>
                         ` : ''}
                     </div>
@@ -3840,6 +3986,16 @@ class UniversalSchedulerCard extends HTMLElement {
         // Delete graph button
         container.querySelector('[data-action="deleteGraph"]')?.addEventListener('click', () => {
             this._deleteGraph();
+        });
+
+        // Create scheduler button (when no scheduler exists)
+        container.querySelector('[data-action="createScheduler"]')?.addEventListener('click', () => {
+            this._createScheduler();
+        });
+
+        // Delete scheduler button
+        container.querySelector('[data-action="deleteScheduler"]')?.addEventListener('click', () => {
+            this._deleteScheduler();
         });
 
         // Weekday buttons
@@ -4280,6 +4436,86 @@ class UniversalSchedulerCard extends HTMLElement {
             this._scheduler.graphs.splice(graphIndex, 0, deletedGraph);
             console.error('Failed to delete graph:', e);
         }
+    }
+
+    async _createScheduler() {
+        if (!this._targetEntity || !this._hass) return;
+
+        const state = this._hass.states[this._targetEntity];
+        if (!state) return;
+
+        const info = this._getEntityInfo(this._targetEntity);
+        const friendlyName = state?.attributes?.friendly_name || this._targetEntity;
+
+        // Create a new scheduler with default graph
+        const defaultGraph = {
+            id: `graph_${Date.now()}`,
+            label: 'Schedule 1',
+            weekdays: [0, 1, 2, 3, 4, 5, 6],
+            attribute: null,
+            mode: 'linear',
+            min_y: info.minY,
+            max_y: info.maxY,
+            x_snap: null,
+            y_snap: 0,
+            step_to_zero: false,
+            x_axis_type: 'time',
+            x_axis_entity: null,
+            x_axis_min: null,
+            x_axis_max: null,
+            x_axis_unit: null,
+            points: [{ x: 0, y: info.minY }, { x: 1440, y: info.minY }]
+        };
+
+        try {
+            await this._hass.callService('universal_scheduler', 'set_schedule_config', {
+                entity_id: this._targetEntity,
+                target_entity: this._targetEntity,
+                domain: info.domain,
+                name: friendlyName,
+                update_interval: 300,
+                enabled: true,
+                graphs_per_row: 1,
+                graphs: [defaultGraph]
+            });
+
+            // Reload data to show the new scheduler
+            await this._loadSchedulerData();
+        } catch (e) {
+            console.error('Failed to create scheduler:', e);
+        }
+    }
+
+    async _deleteScheduler() {
+        if (!this._scheduler || !this._hass) return;
+
+        // Confirm deletion
+        if (!confirm(`Are you sure you want to delete the entire schedule for ${this._scheduler.name}? This cannot be undone.`)) {
+            return;
+        }
+
+        try {
+            await this._hass.callService('universal_scheduler', 'delete_scheduler', {
+                entity_id: this._scheduler.entityId
+            });
+
+            // Clear local data and reload
+            this._scheduler = null;
+            await this._loadSchedulerData();
+        } catch (e) {
+            console.error('Failed to delete scheduler:', e);
+        }
+    }
+
+    async _saveSchedulerName(newName) {
+        if (!this._scheduler || !newName) return;
+
+        // Don't save if name unchanged
+        if (newName === this._scheduler.name) return;
+
+        this._scheduler.name = newName;
+        await this._saveSchedulerConfig();
+        this._render();
     }
 
     async _saveSchedulerConfig() {
