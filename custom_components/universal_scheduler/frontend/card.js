@@ -2706,6 +2706,73 @@ const CARD_STYLES = `
         margin-left: 8px;
         opacity: 0.9;
     }
+
+    /* Edit action buttons */
+    .edit-actions {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 10px;
+        padding: 8px;
+        background: rgba(var(--rgb-primary-color), 0.08);
+        border-radius: 6px;
+        align-items: center;
+    }
+
+    .edit-actions .action-btn {
+        padding: 6px 12px;
+        border-radius: 4px;
+        border: 1px solid var(--divider-color);
+        background: var(--card-background-color);
+        color: var(--primary-text-color);
+        font-size: 0.8rem;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        transition: all 0.2s;
+    }
+
+    .edit-actions .action-btn:hover:not(:disabled) {
+        border-color: var(--primary-color);
+        background: rgba(var(--rgb-primary-color), 0.1);
+    }
+
+    .edit-actions .action-btn:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+    }
+
+    .edit-actions .action-btn.save {
+        background: var(--primary-color);
+        color: white;
+        border-color: var(--primary-color);
+    }
+
+    .edit-actions .action-btn.save:hover:not(:disabled) {
+        background: var(--primary-color);
+        filter: brightness(1.1);
+    }
+
+    .edit-actions .action-btn.reset {
+        color: var(--error-color, #f44336);
+        border-color: var(--error-color, #f44336);
+    }
+
+    .edit-actions .action-btn.reset:hover:not(:disabled) {
+        background: rgba(244, 67, 54, 0.1);
+    }
+
+    .edit-actions .spacer {
+        flex: 1;
+    }
+
+    .edit-actions .changes-indicator {
+        font-size: 0.75rem;
+        color: var(--warning-color, #ff9800);
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
 `;
 
 // Card Editor for GUI configuration
@@ -2894,12 +2961,17 @@ class UniversalSchedulerCardEditor extends HTMLElement {
             </div>
 
             <div class="editor-checkbox">
-                <input type="checkbox" id="show_graph_settings" ${this._config.show_graph_settings ? 'checked' : ''}>
-                <label for="show_graph_settings">Show graph settings (when not editing)</label>
+                <input type="checkbox" id="allow_edit" ${this._config.allow_edit !== false ? 'checked' : ''}>
+                <label for="allow_edit">Allow editing points</label>
             </div>
 
-            <div class="editor-checkbox">
-                <input type="checkbox" id="show_points_editor" ${this._config.show_points_editor ? 'checked' : ''}>
+            <div class="editor-checkbox" style="margin-left: 24px; ${this._config.allow_edit === false ? 'opacity: 0.5; pointer-events: none;' : ''}">
+                <input type="checkbox" id="show_graph_settings" ${this._config.show_graph_settings && this._config.allow_edit !== false ? 'checked' : ''} ${this._config.allow_edit === false ? 'disabled' : ''}>
+                <label for="show_graph_settings">Show graph settings</label>
+            </div>
+
+            <div class="editor-checkbox" style="margin-left: 24px; ${this._config.allow_edit === false ? 'opacity: 0.5; pointer-events: none;' : ''}">
+                <input type="checkbox" id="show_points_editor" ${this._config.show_points_editor && this._config.allow_edit !== false ? 'checked' : ''} ${this._config.allow_edit === false ? 'disabled' : ''}>
                 <label for="show_points_editor">Show points editor</label>
             </div>
 
@@ -2911,11 +2983,6 @@ class UniversalSchedulerCardEditor extends HTMLElement {
             <div class="editor-checkbox">
                 <input type="checkbox" id="show_current_value" ${this._config.show_current_value !== false ? 'checked' : ''}>
                 <label for="show_current_value">Show current value display</label>
-            </div>
-
-            <div class="editor-checkbox">
-                <input type="checkbox" id="allow_edit" ${this._config.allow_edit !== false ? 'checked' : ''}>
-                <label for="allow_edit">Allow editing points</label>
             </div>
         `;
 
@@ -3000,11 +3067,19 @@ class UniversalSchedulerCardEditor extends HTMLElement {
         });
         this.querySelector('#graph_height').addEventListener('change', (e) => this._valueChanged('graph_height', parseInt(e.target.value)));
         this.querySelector('#show_header').addEventListener('change', (e) => this._valueChanged('show_header', e.target.checked));
+        this.querySelector('#allow_edit').addEventListener('change', (e) => {
+            this._valueChanged('allow_edit', e.target.checked);
+            // If disabling edit, also disable dependent options
+            if (!e.target.checked) {
+                this._valueChanged('show_graph_settings', false);
+                this._valueChanged('show_points_editor', false);
+            }
+            this._render();
+        });
         this.querySelector('#show_graph_settings').addEventListener('change', (e) => this._valueChanged('show_graph_settings', e.target.checked));
         this.querySelector('#show_points_editor').addEventListener('change', (e) => this._valueChanged('show_points_editor', e.target.checked));
         this.querySelector('#show_weekdays').addEventListener('change', (e) => this._valueChanged('show_weekdays', e.target.checked));
         this.querySelector('#show_current_value').addEventListener('change', (e) => this._valueChanged('show_current_value', e.target.checked));
-        this.querySelector('#allow_edit').addEventListener('change', (e) => this._valueChanged('allow_edit', e.target.checked));
     }
 
     _updateAutocompleteList() {
@@ -3043,6 +3118,11 @@ class UniversalSchedulerCard extends HTMLElement {
         this._selectedGraphIndex = 0;
         this._isEditing = false;
         this._dragState = null;
+        // Undo/redo state
+        this._pendingChanges = null;
+        this._undoStack = [];
+        this._redoStack = [];
+        this._originalState = null;
     }
 
     static getConfigElement() {
@@ -3310,7 +3390,7 @@ class UniversalSchedulerCard extends HTMLElement {
         const graphIndex = this._config.graph_index !== undefined ?
             Math.min(this._config.graph_index, graphs.length - 1) :
             this._selectedGraphIndex;
-        const graph = graphs[graphIndex] || graphs[0];
+        const graph = this._getDisplayGraph(graphIndex);
 
         if (!graph) {
             return `<div class="no-scheduler"><p>No graphs available</p></div>`;
@@ -3318,8 +3398,35 @@ class UniversalSchedulerCard extends HTMLElement {
 
         const isEntityBased = graph.xAxisType === 'entity';
         const graphHeight = this._config.graph_height || 200;
+        const hasChanges = this._pendingChanges !== null;
+        const canUndo = this._undoStack.length > 0;
+        const canRedo = this._redoStack.length > 0;
+        const allowEdit = this._config.allow_edit !== false;
 
         return `
+            ${allowEdit && (hasChanges || canUndo || canRedo) ? `
+                <div class="edit-actions">
+                    <button class="action-btn" data-action="undo" ${!canUndo ? 'disabled' : ''}>
+                        <ha-icon icon="mdi:undo"></ha-icon> Undo
+                    </button>
+                    <button class="action-btn" data-action="redo" ${!canRedo ? 'disabled' : ''}>
+                        <ha-icon icon="mdi:redo"></ha-icon> Redo
+                    </button>
+                    <div class="spacer"></div>
+                    ${hasChanges ? `
+                        <span class="changes-indicator">
+                            <ha-icon icon="mdi:circle-medium"></ha-icon> Unsaved changes
+                        </span>
+                    ` : ''}
+                    <button class="action-btn reset" data-action="reset" ${!hasChanges ? 'disabled' : ''}>
+                        <ha-icon icon="mdi:close"></ha-icon> Reset
+                    </button>
+                    <button class="action-btn save" data-action="save" ${!hasChanges ? 'disabled' : ''}>
+                        <ha-icon icon="mdi:content-save"></ha-icon> Save
+                    </button>
+                </div>
+            ` : ''}
+
             ${this._config.show_header !== false ? `
                 <div class="scheduler-card-header">
                     <ha-icon class="entity-icon" icon="${this._getDomainIcon(this._scheduler.domain)}"></ha-icon>
@@ -3596,6 +3703,23 @@ class UniversalSchedulerCard extends HTMLElement {
         const container = this.shadowRoot.querySelector('.scheduler-card-container');
         if (!container) return;
 
+        // Edit action buttons (undo, redo, save, reset)
+        container.querySelector('[data-action="undo"]')?.addEventListener('click', () => {
+            this._undo();
+        });
+
+        container.querySelector('[data-action="redo"]')?.addEventListener('click', () => {
+            this._redo();
+        });
+
+        container.querySelector('[data-action="save"]')?.addEventListener('click', () => {
+            this._saveChanges();
+        });
+
+        container.querySelector('[data-action="reset"]')?.addEventListener('click', () => {
+            this._resetChanges();
+        });
+
         // Graph selector
         container.querySelectorAll('.graph-selector-btn').forEach(btn => {
             btn.addEventListener('click', () => {
@@ -3720,7 +3844,7 @@ class UniversalSchedulerCard extends HTMLElement {
 
         const graphContainer = this.shadowRoot.querySelector('[data-graph]');
         const rect = graphContainer.getBoundingClientRect();
-        const graph = this._getCurrentGraph();
+        const graph = this._getDisplayGraph();
         if (!graph) return;
 
         const isEntityBased = graph.xAxisType === 'entity';
@@ -3744,15 +3868,15 @@ class UniversalSchedulerCard extends HTMLElement {
 
         // Add the point
         const graphIndex = this._getGraphIndex();
-        const newPoints = [...graph.points, { x, y }].sort((a, b) => a.x - b.x);
+        const newPoints = [...(graph.points || []), { x, y }].sort((a, b) => a.x - b.x);
 
-        this._savePoints(graphIndex, newPoints);
+        this._stageChange(graphIndex, 'points', newPoints);
     }
 
     _startDrag(pointIndex, startEvent) {
         const graphContainer = this.shadowRoot.querySelector('[data-graph]');
         const rect = graphContainer.getBoundingClientRect();
-        const graph = this._getCurrentGraph();
+        const graph = this._getDisplayGraph();
         if (!graph) return;
 
         const point = this.shadowRoot.querySelector(`.point[data-index="${pointIndex}"]`);
@@ -3763,6 +3887,9 @@ class UniversalSchedulerCard extends HTMLElement {
         const xMax = isEntityBased ? (graph.xAxisMax ?? 100) : 1440;
         const xSnap = graph.xSnap || 0;
         const ySnap = graph.ySnap || 0;
+
+        // Create a working copy of points for visual updates during drag
+        let workingPoints = [...(graph.points || [])];
 
         const onMove = (e) => {
             const xRatio = (e.clientX - rect.left) / rect.width;
@@ -3777,9 +3904,9 @@ class UniversalSchedulerCard extends HTMLElement {
             x = Math.max(xMin, Math.min(xMax, x));
             y = Math.max(graph.minY, Math.min(graph.maxY, y));
 
-            // Update point position visually
-            graph.points[pointIndex] = { x, y };
-            this._renderGraph();
+            // Update working copy visually
+            workingPoints[pointIndex] = { x, y };
+            this._renderGraphWithPoints(graph, workingPoints);
         };
 
         const onUp = () => {
@@ -3788,10 +3915,10 @@ class UniversalSchedulerCard extends HTMLElement {
 
             if (point) point.classList.remove('dragging');
 
-            // Save the changes
+            // Stage the changes
             const graphIndex = this._getGraphIndex();
-            const newPoints = [...graph.points].sort((a, b) => a.x - b.x);
-            this._savePoints(graphIndex, newPoints);
+            const newPoints = [...workingPoints].sort((a, b) => a.x - b.x);
+            this._stageChange(graphIndex, 'points', newPoints);
         };
 
         document.addEventListener('mousemove', onMove);
@@ -3804,6 +3931,21 @@ class UniversalSchedulerCard extends HTMLElement {
         return this._scheduler.graphs[graphIndex];
     }
 
+    _getDisplayGraph(graphIndexOverride = null) {
+        // Returns the graph with pending changes applied (for display)
+        const graphIndex = graphIndexOverride !== null ? graphIndexOverride : this._getGraphIndex();
+        const graphs = this._scheduler?.graphs || [];
+        const originalGraph = graphs[graphIndex];
+
+        if (!originalGraph) return null;
+
+        if (this._pendingChanges && this._pendingChanges.graphIndex === graphIndex) {
+            return { ...originalGraph, ...this._pendingChanges.changes };
+        }
+
+        return originalGraph;
+    }
+
     _getGraphIndex() {
         if (this._config.graph_index !== undefined) {
             return Math.min(this._config.graph_index, (this._scheduler?.graphs?.length || 1) - 1);
@@ -3812,7 +3954,7 @@ class UniversalSchedulerCard extends HTMLElement {
     }
 
     async _toggleWeekday(weekday) {
-        const graph = this._getCurrentGraph();
+        const graph = this._getDisplayGraph();
         if (!graph) return;
 
         const graphIndex = this._getGraphIndex();
@@ -3828,29 +3970,29 @@ class UniversalSchedulerCard extends HTMLElement {
             weekdays.sort((a, b) => a - b);
         }
 
-        await this._updateGraphProperty(graphIndex, 'weekdays', weekdays);
+        this._stageChange(graphIndex, 'weekdays', weekdays);
     }
 
     async _updateGraphSetting(setting, value) {
         const graphIndex = this._getGraphIndex();
 
-        // Map frontend setting names to backend names
+        // Map frontend setting names to internal names
         const settingMap = {
             'mode': 'mode',
-            'stepToZero': 'step_to_zero',
-            'minY': 'min_y',
-            'maxY': 'max_y',
-            'ySnap': 'y_snap',
-            'xSnap': 'x_snap',
-            'xAxisType': 'x_axis_type',
-            'xAxisEntity': 'x_axis_entity',
-            'xAxisMin': 'x_axis_min',
-            'xAxisMax': 'x_axis_max',
-            'xAxisUnit': 'x_axis_unit'
+            'stepToZero': 'stepToZero',
+            'minY': 'minY',
+            'maxY': 'maxY',
+            'ySnap': 'ySnap',
+            'xSnap': 'xSnap',
+            'xAxisType': 'xAxisType',
+            'xAxisEntity': 'xAxisEntity',
+            'xAxisMin': 'xAxisMin',
+            'xAxisMax': 'xAxisMax',
+            'xAxisUnit': 'xAxisUnit'
         };
 
-        const backendSetting = settingMap[setting] || setting;
-        await this._updateGraphProperty(graphIndex, backendSetting, value);
+        const internalSetting = settingMap[setting] || setting;
+        this._stageChange(graphIndex, internalSetting, value);
 
         // If X-axis type changed, re-render to show/hide entity options
         if (setting === 'xAxisType') {
@@ -3858,30 +4000,178 @@ class UniversalSchedulerCard extends HTMLElement {
         }
     }
 
+    _stageChange(graphIndex, property, value) {
+        // Store original state on first change
+        if (!this._originalState) {
+            const graph = this._getCurrentGraph();
+            if (graph) {
+                this._originalState = JSON.parse(JSON.stringify(graph));
+            }
+        }
+
+        // Initialize pending changes if needed
+        if (!this._pendingChanges || this._pendingChanges.graphIndex !== graphIndex) {
+            this._pendingChanges = {
+                graphIndex: graphIndex,
+                changes: {}
+            };
+        }
+
+        // Store previous state for undo
+        const graph = this._getDisplayGraph(graphIndex);
+        const previousValue = graph ? graph[property] : undefined;
+
+        // Push to undo stack
+        this._undoStack.push({
+            graphIndex,
+            property,
+            previousValue: JSON.parse(JSON.stringify(previousValue)),
+            newValue: JSON.parse(JSON.stringify(value))
+        });
+
+        // Clear redo stack on new change
+        this._redoStack = [];
+
+        // Apply the change to pending
+        this._pendingChanges.changes[property] = value;
+
+        // Re-render to show changes
+        this._render();
+    }
+
+    _undo() {
+        if (this._undoStack.length === 0) return;
+
+        const action = this._undoStack.pop();
+        this._redoStack.push(action);
+
+        // Revert the change
+        if (this._pendingChanges && this._pendingChanges.graphIndex === action.graphIndex) {
+            if (action.previousValue === undefined) {
+                delete this._pendingChanges.changes[action.property];
+            } else {
+                this._pendingChanges.changes[action.property] = action.previousValue;
+            }
+
+            // Check if all changes reverted
+            if (Object.keys(this._pendingChanges.changes).length === 0) {
+                this._pendingChanges = null;
+                this._originalState = null;
+            }
+        }
+
+        this._render();
+    }
+
+    _redo() {
+        if (this._redoStack.length === 0) return;
+
+        const action = this._redoStack.pop();
+        this._undoStack.push(action);
+
+        // Re-apply the change
+        if (!this._pendingChanges || this._pendingChanges.graphIndex !== action.graphIndex) {
+            this._pendingChanges = {
+                graphIndex: action.graphIndex,
+                changes: {}
+            };
+        }
+
+        this._pendingChanges.changes[action.property] = action.newValue;
+
+        this._render();
+    }
+
+    _resetChanges() {
+        this._pendingChanges = null;
+        this._undoStack = [];
+        this._redoStack = [];
+        this._originalState = null;
+        this._render();
+    }
+
+    async _saveChanges() {
+        if (!this._pendingChanges || !this._scheduler) return;
+
+        const graphIndex = this._pendingChanges.graphIndex;
+
+        try {
+            // Get current scheduler config
+            const result = await this._hass.callWS({
+                type: 'universal_scheduler/get_schedulers'
+            });
+
+            const schedulers = result.schedulers || {};
+            const config = schedulers[this._scheduler.entityId];
+
+            if (!config?.graphs?.[graphIndex]) return;
+
+            // Map internal names to backend names and apply changes
+            const backendMap = {
+                'mode': 'mode',
+                'stepToZero': 'step_to_zero',
+                'minY': 'min_y',
+                'maxY': 'max_y',
+                'ySnap': 'y_snap',
+                'xSnap': 'x_snap',
+                'xAxisType': 'x_axis_type',
+                'xAxisEntity': 'x_axis_entity',
+                'xAxisMin': 'x_axis_min',
+                'xAxisMax': 'x_axis_max',
+                'xAxisUnit': 'x_axis_unit',
+                'weekdays': 'weekdays',
+                'points': 'points'
+            };
+
+            for (const [key, value] of Object.entries(this._pendingChanges.changes)) {
+                const backendKey = backendMap[key] || key;
+                config.graphs[graphIndex][backendKey] = value;
+            }
+
+            // Save back
+            await this._hass.callWS({
+                type: 'universal_scheduler/set_config',
+                entity_id: this._scheduler.entityId,
+                config: config
+            });
+
+            // Clear pending changes
+            this._pendingChanges = null;
+            this._undoStack = [];
+            this._redoStack = [];
+            this._originalState = null;
+
+            // Reload data
+            await this._loadSchedulerData();
+        } catch (e) {
+            console.error('Failed to save changes:', e);
+        }
+    }
+
     async _updatePoint(pointIndex, field, value) {
-        const graph = this._getCurrentGraph();
+        const graph = this._getDisplayGraph();
         if (!graph) return;
 
         const graphIndex = this._getGraphIndex();
-        const newPoints = [...graph.points];
+        const newPoints = [...(graph.points || [])];
         newPoints[pointIndex] = { ...newPoints[pointIndex], [field]: value };
         newPoints.sort((a, b) => a.x - b.x);
 
-        await this._savePoints(graphIndex, newPoints);
+        this._stageChange(graphIndex, 'points', newPoints);
     }
 
     async _deletePoint(pointIndex) {
-        const graph = this._getCurrentGraph();
-        if (!graph || graph.points.length <= 2) return;
+        const graph = this._getDisplayGraph();
+        if (!graph || (graph.points || []).length <= 2) return;
 
         const graphIndex = this._getGraphIndex();
-        const newPoints = graph.points.filter((_, i) => i !== pointIndex);
+        const newPoints = (graph.points || []).filter((_, i) => i !== pointIndex);
 
-        await this._savePoints(graphIndex, newPoints);
+        this._stageChange(graphIndex, 'points', newPoints);
     }
 
     async _addPoint() {
-        const graph = this._getCurrentGraph();
+        const graph = this._getDisplayGraph();
         if (!graph) return;
 
         const container = this.shadowRoot.querySelector('.scheduler-card-container');
@@ -3903,12 +4193,14 @@ class UniversalSchedulerCard extends HTMLElement {
         if (x === null || isNaN(x) || isNaN(y)) return;
 
         const graphIndex = this._getGraphIndex();
-        const newPoints = [...graph.points, { x, y }].sort((a, b) => a.x - b.x);
+        const newPoints = [...(graph.points || []), { x, y }].sort((a, b) => a.x - b.x);
 
-        await this._savePoints(graphIndex, newPoints);
+        this._stageChange(graphIndex, 'points', newPoints);
     }
 
     async _updateGraphProperty(graphIndex, property, value) {
+        // This is now only used for weekday toggling and other non-staged updates
+        // For staged changes, use _stageChange
         if (!this._scheduler) return;
 
         try {
@@ -3940,34 +4232,8 @@ class UniversalSchedulerCard extends HTMLElement {
     }
 
     async _savePoints(graphIndex, points) {
-        if (!this._scheduler) return;
-
-        try {
-            // Get current scheduler config
-            const result = await this._hass.callWS({
-                type: 'universal_scheduler/get_schedulers'
-            });
-
-            const schedulers = result.schedulers || {};
-            const config = schedulers[this._scheduler.entityId];
-
-            if (!config?.graphs?.[graphIndex]) return;
-
-            // Update points
-            config.graphs[graphIndex].points = points;
-
-            // Save back
-            await this._hass.callWS({
-                type: 'universal_scheduler/set_config',
-                entity_id: this._scheduler.entityId,
-                config: config
-            });
-
-            // Reload data
-            await this._loadSchedulerData();
-        } catch (e) {
-            console.error('Failed to save points:', e);
-        }
+        // Use staged changes instead
+        this._stageChange(graphIndex, 'points', points);
     }
 
     async _applyNow() {
@@ -3986,8 +4252,15 @@ class UniversalSchedulerCard extends HTMLElement {
         const graphContainer = this.shadowRoot.querySelector('[data-graph]');
         if (!graphContainer) return;
 
-        const graph = this._getCurrentGraph();
+        const graph = this._getDisplayGraph();
         if (!graph) return;
+
+        this._renderGraphWithPoints(graph, graph.points);
+    }
+
+    _renderGraphWithPoints(graph, points) {
+        const graphContainer = this.shadowRoot.querySelector('[data-graph]');
+        if (!graphContainer || !graph) return;
 
         const svg = graphContainer.querySelector('.curve-svg');
         const curvePath = svg.querySelector('.curve-line');
@@ -4002,8 +4275,11 @@ class UniversalSchedulerCard extends HTMLElement {
         const yRange = graph.maxY - graph.minY;
         const xRange = xMax - xMin;
 
+        // Create a temporary graph object with the provided points for interpolation
+        const tempGraph = { ...graph, points: points };
+
         // Generate path
-        const pathPoints = this._generateInterpolatedPath(graph, xMin, xMax);
+        const pathPoints = this._generateInterpolatedPath(tempGraph, xMin, xMax);
 
         if (pathPoints.length === 0) {
             curvePath.setAttribute('d', '');
@@ -4028,7 +4304,7 @@ class UniversalSchedulerCard extends HTMLElement {
 
         // Render points
         if (this._config.allow_edit !== false) {
-            graph.points.forEach((point, index) => {
+            (points || []).forEach((point, index) => {
                 const xPercent = ((point.x - xMin) / xRange) * 100;
                 const yPercent = 100 - ((point.y - graph.minY) / yRange) * 100;
 
@@ -4109,7 +4385,7 @@ class UniversalSchedulerCard extends HTMLElement {
         const marker = this.shadowRoot.querySelector('[data-time-marker]');
         if (!marker) return;
 
-        const graph = this._getCurrentGraph();
+        const graph = this._getDisplayGraph();
         if (!graph || graph.xAxisType === 'entity') {
             marker.style.display = 'none';
             return;
@@ -4128,7 +4404,7 @@ class UniversalSchedulerCard extends HTMLElement {
         const nextEl = this.shadowRoot.querySelector('[data-next-value]');
         if (!currentEl || !nextEl) return;
 
-        const graph = this._getCurrentGraph();
+        const graph = this._getDisplayGraph();
         if (!graph) {
             currentEl.textContent = '--';
             nextEl.textContent = '--';
