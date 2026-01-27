@@ -6,7 +6,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.helpers import config_validation as cv
-from homeassistant.components.frontend import async_remove_panel
+from homeassistant.components.frontend import async_remove_panel, add_extra_js_url
 from homeassistant.components.panel_custom import async_register_panel
 from homeassistant.helpers.storage import Store
 from homeassistant.components import websocket_api
@@ -258,6 +258,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
         trust_external=False,
         require_admin=False,
     )
+
+    # Register Lovelace card as extra JS module
+    add_extra_js_url(hass, f"{URL_BASE}/card.js")
+    _LOGGER.info("Registered Universal Scheduler Lovelace card")
 
     # Helper function to save schedulers to storage
     async def save_schedulers():
