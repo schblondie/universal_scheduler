@@ -257,9 +257,6 @@ class UniversalSchedulerSwitch(SwitchEntity, RestoreEntity):
         # Set up X-axis entity listeners for entity-based graphs
         await self._setup_x_axis_listeners()
 
-        # Set up X-axis entity listeners for entity-based graphs
-        await self._setup_x_axis_listeners()
-
         # Trigger an immediate update so the target reflects the schedule right away
         await self._update_entity()
 

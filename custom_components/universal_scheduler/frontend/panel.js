@@ -56,15 +56,50 @@ const PANEL_STYLES = `
         gap: 10px;
     }
 
+    /* Global settings - collapsible */
     .global-settings {
-        display: flex;
-        gap: 15px;
         background: var(--card-background-color);
-        padding: 12px 15px;
         border-radius: 8px;
         margin-bottom: 15px;
-        align-items: center;
         flex-shrink: 0;
+        overflow: hidden;
+    }
+
+    .global-settings-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 15px;
+        cursor: pointer;
+        font-weight: 500;
+        font-size: 0.9rem;
+        transition: background 0.2s;
+    }
+
+    .global-settings-header:hover {
+        background: rgba(var(--rgb-primary-color), 0.05);
+    }
+
+    .global-settings-header .collapse-indicator {
+        transition: transform 0.2s;
+        opacity: 0.6;
+        --mdc-icon-size: 18px;
+    }
+
+    .global-settings.collapsed .global-settings-header .collapse-indicator {
+        transform: rotate(-90deg);
+    }
+
+    .global-settings-content {
+        display: flex;
+        gap: 15px;
+        padding: 0 15px 12px 15px;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+
+    .global-settings.collapsed .global-settings-content {
+        display: none;
     }
 
     .setting-group {
@@ -591,6 +626,63 @@ const PANEL_STYLES = `
         text-transform: uppercase;
     }
 
+    /* X-axis entity autocomplete (inline in graph settings) */
+    .x-entity-autocomplete-wrapper {
+        position: relative;
+    }
+
+    .x-entity-autocomplete-wrapper input {
+        width: 140px;
+        padding: 6px 8px;
+        border-radius: 4px;
+        border: 1px solid var(--divider-color);
+        background: var(--card-background-color);
+        color: var(--primary-text-color);
+        font-size: 0.85rem;
+    }
+
+    .x-entity-autocomplete-list {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        width: 280px;
+        max-height: 200px;
+        overflow-y: auto;
+        background: var(--card-background-color);
+        border: 1px solid var(--divider-color);
+        border-radius: 6px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        z-index: 1001;
+        display: none;
+    }
+
+    .x-entity-autocomplete-list.show {
+        display: block;
+    }
+
+    .x-entity-autocomplete-list .autocomplete-item {
+        padding: 8px 10px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        border-bottom: 1px solid var(--divider-color);
+        font-size: 0.85rem;
+    }
+
+    .x-entity-autocomplete-list .autocomplete-item:last-child {
+        border-bottom: none;
+    }
+
+    .x-entity-autocomplete-list .autocomplete-item:hover {
+        background: var(--secondary-background-color);
+    }
+
+    .x-entity-autocomplete-list .autocomplete-item .domain-badge {
+        font-size: 0.65rem;
+        padding: 1px 4px;
+    }
+
     .entity-detected-info {
         margin-top: 10px;
         padding: 10px;
@@ -612,6 +704,24 @@ const PANEL_STYLES = `
         gap: 10px;
         justify-content: flex-end;
         margin-top: 20px;
+    }
+
+    /* Settings modal content */
+    .settings-modal-content {
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+    }
+
+    .settings-modal-content .form-group {
+        margin-bottom: 0;
+    }
+
+    .form-hint {
+        display: block;
+        font-size: 0.75rem;
+        opacity: 0.6;
+        margin-top: 4px;
     }
 
     .coming-soon {
@@ -1281,14 +1391,52 @@ const PANEL_STYLES = `
         transform: rotate(-90deg);
     }
 
+    /* Graph settings wrapper (collapsible) */
+    .graph-settings-wrapper {
+        background: var(--secondary-background-color);
+        border-radius: 6px;
+        margin-bottom: 10px;
+        overflow: hidden;
+    }
+
+    .graph-settings-header {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 10px;
+        cursor: pointer;
+        font-size: 0.85rem;
+        font-weight: 500;
+        transition: background 0.2s;
+    }
+
+    .graph-settings-header:hover {
+        background: rgba(var(--rgb-primary-color), 0.08);
+    }
+
+    .graph-settings-wrapper .collapse-indicator {
+        transition: transform 0.2s;
+        opacity: 0.6;
+        --mdc-icon-size: 16px;
+    }
+
+    .graph-settings-wrapper.collapsed .collapse-indicator {
+        transform: rotate(-90deg);
+    }
+
+    .graph-settings-body {
+        border-top: 1px solid var(--divider-color);
+    }
+
+    .graph-settings-wrapper.collapsed .graph-settings-body {
+        display: none;
+    }
+
     /* Graph settings row (per-graph) */
     .graph-settings {
         display: flex;
         gap: 10px;
         padding: 8px 10px;
-        background: var(--secondary-background-color);
-        border-radius: 6px;
-        margin-bottom: 10px;
         flex-wrap: wrap;
         align-items: center;
     }
@@ -1346,10 +1494,10 @@ const PANEL_STYLES = `
         }
 
         /* Global settings - stack vertically on mobile */
-        .global-settings {
+        .global-settings-content {
             flex-direction: column;
             gap: 10px;
-            padding: 10px;
+            padding: 0 10px 10px 10px;
         }
 
         .setting-group {
@@ -1721,59 +1869,68 @@ const PANEL_TEMPLATE = `
         </div>
     </div>
 
-    <div class="global-settings">
-        <div class="setting-group">
-            <label>X-Snap:</label>
-            <select id="globalSnapSelect">
-                <option value="0">Off</option>
-                <option value="5">5 min</option>
-                <option value="10">10 min</option>
-                <option value="15">15 min</option>
-                <option value="30" selected>30 min</option>
-                <option value="60">1 hour</option>
-            </select>
+    <div class="global-settings collapsed">
+        <div class="global-settings-header" id="globalSettingsToggle">
+            <ha-icon class="collapse-indicator" icon="mdi:chevron-down"></ha-icon>
+            <span>Global Settings</span>
         </div>
-        <div class="setting-group">
-            <label>Graph Display:</label>
-            <select id="graphDisplayMode">
-                <option value="single" selected>One at a time</option>
-                <option value="toggle">Click to toggle</option>
-                <option value="all">Show all</option>
-            </select>
-        </div>
-        <div class="setting-group">
-            <label>Per Page:</label>
-            <select id="itemsPerPage">
-                <option value="5">5</option>
-                <option value="10">10</option>
-                <option value="30" selected>30</option>
-                <option value="100">100</option>
-                <option value="0">Unlimited</option>
-            </select>
-        </div>
-        <div class="setting-group">
-            <label>Columns:</label>
-            <select id="columnsCount">
-                <option value="1" selected>1</option>
-                <option value="2">2</option>
-                <option value="3">3</option>
-                <option value="4">4</option>
-                <option value="5">5</option>
-                <option value="6">6</option>
-                <option value="7">7</option>
-                <option value="8">8</option>
-            </select>
-        </div>
-        <div class="setting-group">
-            <label>Graph Height:</label>
-            <select id="graphHeight">
-                <option value="150">150px</option>
-                <option value="200">200px</option>
-                <option value="250" selected>250px</option>
-                <option value="300">300px</option>
-                <option value="400">400px</option>
-                <option value="500">500px</option>
-            </select>
+        <div class="global-settings-content">
+            <div class="setting-group">
+                <label>X-Snap:</label>
+                <select id="globalSnapSelect">
+                    <option value="0">Off</option>
+                    <option value="0.1">0.1</option>
+                    <option value="0.5">0.5</option>
+                    <option value="1">1</option>
+                    <option value="5">5 min</option>
+                    <option value="10">10 min</option>
+                    <option value="15">15 min</option>
+                    <option value="30" selected>30 min</option>
+                    <option value="60">1 hour</option>
+                </select>
+            </div>
+            <div class="setting-group">
+                <label>Graph Display:</label>
+                <select id="graphDisplayMode">
+                    <option value="single" selected>One at a time</option>
+                    <option value="toggle">Click to toggle</option>
+                    <option value="all">Show all</option>
+                </select>
+            </div>
+            <div class="setting-group">
+                <label>Per Page:</label>
+                <select id="itemsPerPage">
+                    <option value="5">5</option>
+                    <option value="10">10</option>
+                    <option value="30" selected>30</option>
+                    <option value="100">100</option>
+                    <option value="0">Unlimited</option>
+                </select>
+            </div>
+            <div class="setting-group">
+                <label>Columns:</label>
+                <select id="columnsCount">
+                    <option value="1" selected>1</option>
+                    <option value="2">2</option>
+                    <option value="3">3</option>
+                    <option value="4">4</option>
+                    <option value="5">5</option>
+                    <option value="6">6</option>
+                    <option value="7">7</option>
+                    <option value="8">8</option>
+                </select>
+            </div>
+            <div class="setting-group">
+                <label>Graph Height:</label>
+                <select id="graphHeight">
+                    <option value="150">150px</option>
+                    <option value="200">200px</option>
+                    <option value="250" selected>250px</option>
+                    <option value="300">300px</option>
+                    <option value="400">400px</option>
+                    <option value="500">500px</option>
+                </select>
+            </div>
         </div>
     </div>
 
@@ -1845,10 +2002,32 @@ const PANEL_TEMPLATE = `
     <div class="modal-overlay" id="settingsModal">
         <div class="modal-dialog">
             <h3>Scheduler Settings</h3>
-            <div class="coming-soon">
-                <ha-icon icon="mdi:wrench-clock"></ha-icon>
-                <p>Coming soon!</p>
-                <p style="opacity: 0.7; font-size: 0.9rem;">Advanced scheduler settings will be available here.</p>
+            <div class="settings-modal-content">
+                <div class="form-group">
+                    <label>Update Interval</label>
+                    <select id="settingsUpdateInterval">
+                        <option value="1">1 s</option>
+                        <option value="5">5 s</option>
+                        <option value="10">10 s</option>
+                        <option value="30">30 s</option>
+                        <option value="60">1 min</option>
+                        <option value="300">5 min</option>
+                        <option value="600">10 min</option>
+                        <option value="900">15 min</option>
+                        <option value="1800">30 min</option>
+                        <option value="3600">1 hour</option>
+                    </select>
+                    <span class="form-hint">How often the scheduler applies values to the target entity</span>
+                </div>
+                <div class="form-group">
+                    <label>Graphs per Row</label>
+                    <select id="settingsGraphsPerRow">
+                        <option value="1">1</option>
+                        <option value="2">2</option>
+                        <option value="3">3</option>
+                    </select>
+                    <span class="form-hint">Number of graphs displayed side by side</span>
+                </div>
             </div>
             <div class="modal-buttons">
                 <button class="secondary" id="settingsCloseBtn">Close</button>
@@ -1895,85 +2074,98 @@ function createGraphHTML(graph, graphIndex, scheduler) {
             </div>
 
             <div class="graph-content">
-                <div class="graph-settings">
-                    <div class="input-group">
-                        <label>Mode</label>
-                        <select data-graph-setting="mode">
-                            <option value="linear" ${graph.mode === 'linear' ? 'selected' : ''}>Linear</option>
-                            <option value="smooth" ${graph.mode === 'smooth' ? 'selected' : ''}>Smooth</option>
-                            <option value="step" ${graph.mode === 'step' ? 'selected' : ''}>Step</option>
-                        </select>
+                <div class="graph-settings-wrapper collapsed">
+                    <div class="graph-settings-header" data-action="toggleGraphSettings">
+                        <ha-icon class="collapse-indicator" icon="mdi:chevron-down"></ha-icon>
+                        <span>Graph Settings</span>
                     </div>
-                    <div class="input-group">
-                        <label>Step to min</label>
-                        <div class="toggle-switch small ${graph.stepToZero ? 'active' : ''}" data-graph-setting="stepToZero"></div>
-                    </div>
-                    <div class="input-group">
-                        <label>Y-Min</label>
-                        <input type="number" data-graph-setting="minY" value="${graph.minY}" style="width: 70px;">
-                    </div>
-                    <div class="input-group">
-                        <label>Y-Max</label>
-                        <input type="number" data-graph-setting="maxY" value="${graph.maxY}" style="width: 70px;">
-                    </div>
-                    <div class="input-group">
-                        <label>Y-Snap</label>
-                        <select data-graph-setting="ySnap">
-                            <option value="0" ${ySnapValue === 0 ? 'selected' : ''}>Off</option>
-                            <option value="0.1" ${ySnapValue === 0.1 ? 'selected' : ''}>0.1</option>
-                            <option value="0.5" ${ySnapValue === 0.5 ? 'selected' : ''}>0.5</option>
-                            <option value="1" ${ySnapValue === 1 ? 'selected' : ''}>1</option>
-                            <option value="5" ${ySnapValue === 5 ? 'selected' : ''}>5</option>
-                            <option value="10" ${ySnapValue === 10 ? 'selected' : ''}>10</option>
-                        </select>
-                    </div>
-                    <div class="input-group">
-                        <label>X-Snap</label>
-                        <select data-graph-setting="xSnap">
-                            <option value="" ${graph.xSnap === undefined || graph.xSnap === null ? 'selected' : ''}>Global</option>
-                            <option value="0" ${graph.xSnap === 0 ? 'selected' : ''}>Off</option>
-                            <option value="1" ${graph.xSnap === 1 ? 'selected' : ''}>1 min</option>
-                            <option value="5" ${graph.xSnap === 5 ? 'selected' : ''}>5 min</option>
-                            <option value="10" ${graph.xSnap === 10 ? 'selected' : ''}>10 min</option>
-                            <option value="15" ${graph.xSnap === 15 ? 'selected' : ''}>15 min</option>
-                            <option value="30" ${graph.xSnap === 30 ? 'selected' : ''}>30 min</option>
-                            <option value="60" ${graph.xSnap === 60 ? 'selected' : ''}>1 hour</option>
-                        </select>
-                    </div>
-                    <div class="input-group">
-                        <label>Attribute</label>
-                        <select data-graph-setting="attribute">
-                            ${attributeOptions}
-                        </select>
-                    </div>
-                    <button class="danger small" data-action="deleteGraph" title="Delete this graph">
-                        <ha-icon icon="mdi:delete"></ha-icon>
-                    </button>
-                </div>
+                    <div class="graph-settings-body">
+                        <div class="graph-settings">
+                            <div class="input-group">
+                                <label>Mode</label>
+                                <select data-graph-setting="mode">
+                                    <option value="linear" ${graph.mode === 'linear' ? 'selected' : ''}>Linear</option>
+                                    <option value="smooth" ${graph.mode === 'smooth' ? 'selected' : ''}>Smooth</option>
+                                    <option value="step" ${graph.mode === 'step' ? 'selected' : ''}>Step</option>
+                                </select>
+                            </div>
+                            <div class="input-group">
+                                <label>Step to min</label>
+                                <div class="toggle-switch small ${graph.stepToZero ? 'active' : ''}" data-graph-setting="stepToZero"></div>
+                            </div>
+                            <div class="input-group">
+                                <label>Y-Min</label>
+                                <input type="number" data-graph-setting="minY" value="${graph.minY}" style="width: 70px;">
+                            </div>
+                            <div class="input-group">
+                                <label>Y-Max</label>
+                                <input type="number" data-graph-setting="maxY" value="${graph.maxY}" style="width: 70px;">
+                            </div>
+                            <div class="input-group">
+                                <label>Y-Snap</label>
+                                <select data-graph-setting="ySnap">
+                                    <option value="0" ${ySnapValue === 0 ? 'selected' : ''}>Off</option>
+                                    <option value="0.1" ${ySnapValue === 0.1 ? 'selected' : ''}>0.1</option>
+                                    <option value="0.5" ${ySnapValue === 0.5 ? 'selected' : ''}>0.5</option>
+                                    <option value="1" ${ySnapValue === 1 ? 'selected' : ''}>1</option>
+                                    <option value="5" ${ySnapValue === 5 ? 'selected' : ''}>5</option>
+                                    <option value="10" ${ySnapValue === 10 ? 'selected' : ''}>10</option>
+                                </select>
+                            </div>
+                            <div class="input-group">
+                                <label>X-Snap</label>
+                                <select data-graph-setting="xSnap">
+                                    <option value="" ${graph.xSnap === undefined || graph.xSnap === null ? 'selected' : ''}>Global</option>
+                                    <option value="0" ${graph.xSnap === 0 ? 'selected' : ''}>Off</option>
+                                    <option value="0.1" ${graph.xSnap === 0.1 ? 'selected' : ''}>0.1</option>
+                                    <option value="0.5" ${graph.xSnap === 0.5 ? 'selected' : ''}>0.5</option>
+                                    <option value="1" ${graph.xSnap === 1 ? 'selected' : ''}>1</option>
+                                    <option value="5" ${graph.xSnap === 5 ? 'selected' : ''}>5</option>
+                                    <option value="10" ${graph.xSnap === 10 ? 'selected' : ''}>10</option>
+                                    <option value="15" ${graph.xSnap === 15 ? 'selected' : ''}>15</option>
+                                    <option value="30" ${graph.xSnap === 30 ? 'selected' : ''}>30</option>
+                                    <option value="60" ${graph.xSnap === 60 ? 'selected' : ''}>60</option>
+                                </select>
+                            </div>
+                            <div class="input-group">
+                                <label>Attribute</label>
+                                <select data-graph-setting="attribute">
+                                    ${attributeOptions}
+                                </select>
+                            </div>
+                            <button class="danger small" data-action="deleteGraph" title="Delete this graph">
+                                <ha-icon icon="mdi:delete"></ha-icon>
+                            </button>
+                        </div>
 
-                <div class="graph-settings x-axis-settings">
-                    <div class="input-group">
-                        <label>X-Axis</label>
-                        <select data-graph-setting="xAxisType">
-                            <option value="time" ${(graph.xAxisType || 'time') === 'time' ? 'selected' : ''}>Time (24h)</option>
-                            <option value="entity" ${graph.xAxisType === 'entity' ? 'selected' : ''}>Entity Value</option>
-                        </select>
-                    </div>
-                    <div class="input-group x-axis-entity-group" style="display: ${graph.xAxisType === 'entity' ? 'flex' : 'none'};">
-                        <label>X Entity</label>
-                        <input type="text" data-graph-setting="xAxisEntity" value="${graph.xAxisEntity || ''}" placeholder="sensor.lux" style="width: 140px;">
-                    </div>
-                    <div class="input-group x-axis-min-group" style="display: ${graph.xAxisType === 'entity' ? 'flex' : 'none'};">
-                        <label>X-Min</label>
-                        <input type="number" data-graph-setting="xAxisMin" value="${graph.xAxisMin ?? 0}" style="width: 70px;">
-                    </div>
-                    <div class="input-group x-axis-max-group" style="display: ${graph.xAxisType === 'entity' ? 'flex' : 'none'};">
-                        <label>X-Max</label>
-                        <input type="number" data-graph-setting="xAxisMax" value="${graph.xAxisMax ?? 100}" style="width: 70px;">
-                    </div>
-                    <div class="input-group x-axis-unit-group" style="display: ${graph.xAxisType === 'entity' ? 'flex' : 'none'};">
-                        <label>X Unit</label>
-                        <input type="text" data-graph-setting="xAxisUnit" value="${graph.xAxisUnit || ''}" placeholder="lx" style="width: 50px;">
+                        <div class="graph-settings x-axis-settings">
+                            <div class="input-group">
+                                <label>X-Axis</label>
+                                <select data-graph-setting="xAxisType">
+                                    <option value="time" ${(graph.xAxisType || 'time') === 'time' ? 'selected' : ''}>Time (24h)</option>
+                                    <option value="entity" ${graph.xAxisType === 'entity' ? 'selected' : ''}>Entity Value</option>
+                                </select>
+                            </div>
+                            <div class="input-group x-axis-entity-group" style="display: ${graph.xAxisType === 'entity' ? 'flex' : 'none'};">
+                                <label>X Entity</label>
+                                <div class="x-entity-autocomplete-wrapper">
+                                    <input type="text" data-graph-setting="xAxisEntity" value="${graph.xAxisEntity || ''}" placeholder="sensor.lux" autocomplete="off">
+                                    <div class="x-entity-autocomplete-list"></div>
+                                </div>
+                            </div>
+                            <div class="input-group x-axis-min-group" style="display: ${graph.xAxisType === 'entity' ? 'flex' : 'none'};">
+                                <label>X-Min</label>
+                                <input type="number" data-graph-setting="xAxisMin" value="${graph.xAxisMin ?? 0}" style="width: 70px;">
+                            </div>
+                            <div class="input-group x-axis-max-group" style="display: ${graph.xAxisType === 'entity' ? 'flex' : 'none'};">
+                                <label>X-Max</label>
+                                <input type="number" data-graph-setting="xAxisMax" value="${graph.xAxisMax ?? 100}" style="width: 70px;">
+                            </div>
+                            <div class="input-group x-axis-unit-group" style="display: ${graph.xAxisType === 'entity' ? 'flex' : 'none'};">
+                                <label>X Unit</label>
+                                <input type="text" data-graph-setting="xAxisUnit" value="${graph.xAxisUnit || ''}" placeholder="lx" style="width: 50px;">
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -2087,32 +2279,6 @@ function createSchedulerCardHTML(scheduler, domainIcon) {
         </div>
 
         <div class="scheduler-body">
-            <div class="scheduler-top-settings">
-                <div class="input-group">
-                    <label>Update Interval</label>
-                    <select data-setting="updateInterval">
-                        <option value="1" ${scheduler.updateInterval === 1 ? 'selected' : ''}>1 s</option>
-                        <option value="5" ${scheduler.updateInterval === 5 ? 'selected' : ''}>5 s</option>
-                        <option value="10" ${scheduler.updateInterval === 10 ? 'selected' : ''}>10 s</option>
-                        <option value="30" ${scheduler.updateInterval === 30 ? 'selected' : ''}>30 s</option>
-                        <option value="60" ${scheduler.updateInterval === 60 ? 'selected' : ''}>1 min</option>
-                        <option value="300" ${(scheduler.updateInterval === 300 || !scheduler.updateInterval) ? 'selected' : ''}>5 min</option>
-                        <option value="600" ${scheduler.updateInterval === 600 ? 'selected' : ''}>10 min</option>
-                        <option value="900" ${scheduler.updateInterval === 900 ? 'selected' : ''}>15 min</option>
-                        <option value="1800" ${scheduler.updateInterval === 1800 ? 'selected' : ''}>30 min</option>
-                        <option value="3600" ${scheduler.updateInterval === 3600 ? 'selected' : ''}>1 hour</option>
-                    </select>
-                </div>
-                <div class="input-group">
-                    <label>Graphs/Row</label>
-                    <select data-setting="graphsPerRow">
-                        <option value="1" ${(scheduler.graphsPerRow || 1) === 1 ? 'selected' : ''}>1</option>
-                        <option value="2" ${scheduler.graphsPerRow === 2 ? 'selected' : ''}>2</option>
-                        <option value="3" ${scheduler.graphsPerRow === 3 ? 'selected' : ''}>3</option>
-                    </select>
-                </div>
-            </div>
-
             <div class="graphs-container" style="--graphs-per-row: ${scheduler.graphsPerRow || 1}">
                 ${graphsHTML}
             </div>
@@ -5290,9 +5456,16 @@ class UniversalSchedulerPanel extends HTMLElement {
             this.openCreateModal();
         });
 
+        // Global settings toggle
+        this._root.querySelector('#globalSettingsToggle').addEventListener('click', () => {
+            const globalSettings = this._root.querySelector('.global-settings');
+            globalSettings.classList.toggle('collapsed');
+            this._saveGlobalSettings();
+        });
+
         // Global snap select
         this._root.querySelector('#globalSnapSelect').addEventListener('change', (e) => {
-            this.globalSnapMinutes = parseInt(e.target.value);
+            this.globalSnapMinutes = parseFloat(e.target.value);
             this._saveGlobalSettings();
         });
 
@@ -5366,12 +5539,34 @@ class UniversalSchedulerPanel extends HTMLElement {
 
         // Settings modal events
         this._root.querySelector('#settingsCloseBtn').addEventListener('click', () => {
-            this._root.querySelector('#settingsModal').classList.remove('show');
+            this.closeSettingsModal();
         });
 
         this._root.querySelector('#settingsModal').addEventListener('click', (e) => {
             if (e.target.classList.contains('modal-overlay')) {
-                this._root.querySelector('#settingsModal').classList.remove('show');
+                this.closeSettingsModal();
+            }
+        });
+
+        // Settings modal - Update Interval change
+        this._root.querySelector('#settingsUpdateInterval').addEventListener('change', (e) => {
+            if (this._settingsModalEntityId) {
+                this.saveUndoState(this._settingsModalEntityId);
+                this.schedulers[this._settingsModalEntityId].updateInterval = parseInt(e.target.value);
+            }
+        });
+
+        // Settings modal - Graphs per Row change
+        this._root.querySelector('#settingsGraphsPerRow').addEventListener('change', (e) => {
+            if (this._settingsModalEntityId) {
+                this.saveUndoState(this._settingsModalEntityId);
+                const value = parseInt(e.target.value);
+                this.schedulers[this._settingsModalEntityId].graphsPerRow = value;
+                // Update the card's graphs container
+                const card = this._root.querySelector(`[data-entity="${this._settingsModalEntityId}"]`);
+                if (card) {
+                    card.querySelector('.graphs-container')?.style.setProperty('--graphs-per-row', value);
+                }
             }
         });
 
@@ -5449,6 +5644,33 @@ class UniversalSchedulerPanel extends HTMLElement {
 
     closeCreateModal() {
         this._root.querySelector('#createModal').classList.remove('show');
+    }
+
+    openSettingsModal(entityId) {
+        const scheduler = this.schedulers[entityId];
+        if (!scheduler) return;
+
+        this._settingsModalEntityId = entityId;
+
+        // Populate modal with current values
+        const updateIntervalSelect = this._root.querySelector('#settingsUpdateInterval');
+        const graphsPerRowSelect = this._root.querySelector('#settingsGraphsPerRow');
+
+        updateIntervalSelect.value = (scheduler.updateInterval || 300).toString();
+        graphsPerRowSelect.value = (scheduler.graphsPerRow || 1).toString();
+
+        // Update modal title to show which scheduler
+        const modalTitle = this._root.querySelector('#settingsModal h3');
+        if (modalTitle) {
+            modalTitle.textContent = `Settings: ${scheduler.name}`;
+        }
+
+        this._root.querySelector('#settingsModal').classList.add('show');
+    }
+
+    closeSettingsModal() {
+        this._root.querySelector('#settingsModal').classList.remove('show');
+        this._settingsModalEntityId = null;
     }
 
     confirmCreateScheduler() {
@@ -5835,7 +6057,7 @@ class UniversalSchedulerPanel extends HTMLElement {
         // Settings button - opens settings modal
         card.querySelector('[data-action="settings"]').addEventListener('click', (e) => {
             e.stopPropagation();
-            this._root.querySelector('#settingsModal').classList.add('show');
+            this.openSettingsModal(entityId);
         });
 
         // Delete button
@@ -5844,19 +6066,6 @@ class UniversalSchedulerPanel extends HTMLElement {
             if (confirm(`Delete scheduler for ${entityId}?`)) {
                 this.deleteScheduler(entityId);
             }
-        });
-
-        // Top-level scheduler settings
-        card.querySelector('[data-setting="updateInterval"]').addEventListener('change', (e) => {
-            this.saveUndoState(entityId);
-            this.schedulers[entityId].updateInterval = parseInt(e.target.value);
-        });
-
-        card.querySelector('[data-setting="graphsPerRow"]').addEventListener('change', (e) => {
-            this.saveUndoState(entityId);
-            const value = parseInt(e.target.value);
-            this.schedulers[entityId].graphsPerRow = value;
-            card.querySelector('.graphs-container').style.setProperty('--graphs-per-row', value);
         });
 
         // Add Graph button
@@ -5885,6 +6094,14 @@ class UniversalSchedulerPanel extends HTMLElement {
         section.querySelector('[data-action="toggleGraph"]').addEventListener('click', (e) => {
             if (e.target.closest('.weekday-selector') || e.target.closest('[data-action="editGraphLabel"]')) return;
             this.toggleGraphSection(entityId, graphIndex, section);
+        });
+
+        // Toggle graph settings collapse
+        section.querySelector('[data-action="toggleGraphSettings"]')?.addEventListener('click', (e) => {
+            const wrapper = section.querySelector('.graph-settings-wrapper');
+            if (wrapper) {
+                wrapper.classList.toggle('collapsed');
+            }
         });
 
         // Graph label edit
@@ -6068,7 +6285,66 @@ class UniversalSchedulerPanel extends HTMLElement {
             }
         });
 
-        // X-axis entity input handler
+        // X-axis entity autocomplete setup
+        const xEntityInput = section.querySelector('[data-graph-setting="xAxisEntity"]');
+        const xEntityAutocomplete = section.querySelector('.x-entity-autocomplete-list');
+
+        if (xEntityInput && xEntityAutocomplete) {
+            xEntityInput.addEventListener('input', (e) => {
+                const value = e.target.value.toLowerCase();
+                // Get all sensor/input_number entities for X-axis
+                const allEntities = Object.keys(this._hass?.states || {})
+                    .filter(id => {
+                        const domain = id.split('.')[0];
+                        return ['sensor', 'input_number', 'number', 'counter'].includes(domain);
+                    })
+                    .sort();
+
+                const matches = allEntities.filter(id =>
+                    id.toLowerCase().includes(value) ||
+                    (this._hass?.states[id]?.attributes?.friendly_name || '').toLowerCase().includes(value)
+                ).slice(0, 10);
+
+                if (value && matches.length > 0) {
+                    xEntityAutocomplete.innerHTML = matches.map(id => {
+                        const state = this._hass?.states[id];
+                        const name = state?.attributes?.friendly_name || id;
+                        const domain = id.split('.')[0];
+                        return `
+                            <div class="autocomplete-item" data-entity="${id}">
+                                <ha-icon icon="${getDomainIcon(domain)}"></ha-icon>
+                                <span>${name}</span>
+                                <span class="domain-badge">${domain}</span>
+                            </div>
+                        `;
+                    }).join('');
+                    xEntityAutocomplete.classList.add('show');
+                } else {
+                    xEntityAutocomplete.classList.remove('show');
+                }
+            });
+
+            xEntityAutocomplete.addEventListener('click', (e) => {
+                const item = e.target.closest('.autocomplete-item');
+                if (item) {
+                    const selectedEntityId = item.dataset.entity;
+                    xEntityInput.value = selectedEntityId;
+                    xEntityAutocomplete.classList.remove('show');
+                    // Trigger the change event to apply the entity
+                    xEntityInput.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+            });
+
+            // Close autocomplete when clicking outside
+            xEntityInput.addEventListener('blur', () => {
+                // Delay to allow click on autocomplete item
+                setTimeout(() => {
+                    xEntityAutocomplete.classList.remove('show');
+                }, 200);
+            });
+        }
+
+        // X-axis entity input handler (change event)
         section.querySelector('[data-graph-setting="xAxisEntity"]')?.addEventListener('change', (e) => {
             this.saveUndoState(entityId);
             const graph = getGraph();
@@ -6872,12 +7148,14 @@ class UniversalSchedulerPanel extends HTMLElement {
 
     _saveGlobalSettings() {
         try {
+            const globalSettings = this._root.querySelector('.global-settings');
             const settings = {
                 globalSnapMinutes: this.globalSnapMinutes,
                 graphDisplayMode: this.graphDisplayMode,
                 itemsPerPage: this.itemsPerPage,
                 columnsCount: this.columnsCount,
-                graphHeight: this.graphHeight
+                graphHeight: this.graphHeight,
+                globalSettingsCollapsed: globalSettings?.classList.contains('collapsed') ?? true
             };
             localStorage.setItem('universal_scheduler_global_settings', JSON.stringify(settings));
         } catch (e) {
@@ -6906,11 +7184,17 @@ class UniversalSchedulerPanel extends HTMLElement {
                 if (settings.graphHeight !== undefined) {
                     this.graphHeight = settings.graphHeight;
                 }
+                // Restore collapsed state (default to collapsed)
+                this._globalSettingsCollapsed = settings.globalSettingsCollapsed ?? true;
 
                 console.log('Restored global settings');
+            } else {
+                // Default to collapsed if no settings stored
+                this._globalSettingsCollapsed = true;
             }
         } catch (e) {
             console.warn('Failed to restore global settings:', e);
+            this._globalSettingsCollapsed = true;
         }
     }
 
@@ -6935,6 +7219,16 @@ class UniversalSchedulerPanel extends HTMLElement {
         if (columnsCount) {
             columnsCount.value = this.columnsCount.toString();
             this._root.querySelector('#schedulersContainer')?.style.setProperty('--columns-count', this.columnsCount);
+        }
+
+        // Apply global settings collapsed state
+        const globalSettings = this._root.querySelector('.global-settings');
+        if (globalSettings) {
+            if (this._globalSettingsCollapsed) {
+                globalSettings.classList.add('collapsed');
+            } else {
+                globalSettings.classList.remove('collapsed');
+            }
         }
 
         const graphHeight = this._root.querySelector('#graphHeight');

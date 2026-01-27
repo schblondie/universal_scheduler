@@ -35,15 +35,50 @@ export const PANEL_STYLES = `
         gap: 10px;
     }
 
+    /* Global settings - collapsible */
     .global-settings {
-        display: flex;
-        gap: 15px;
         background: var(--card-background-color);
-        padding: 12px 15px;
         border-radius: 8px;
         margin-bottom: 15px;
-        align-items: center;
         flex-shrink: 0;
+        overflow: hidden;
+    }
+
+    .global-settings-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 15px;
+        cursor: pointer;
+        font-weight: 500;
+        font-size: 0.9rem;
+        transition: background 0.2s;
+    }
+
+    .global-settings-header:hover {
+        background: rgba(var(--rgb-primary-color), 0.05);
+    }
+
+    .global-settings-header .collapse-indicator {
+        transition: transform 0.2s;
+        opacity: 0.6;
+        --mdc-icon-size: 18px;
+    }
+
+    .global-settings.collapsed .global-settings-header .collapse-indicator {
+        transform: rotate(-90deg);
+    }
+
+    .global-settings-content {
+        display: flex;
+        gap: 15px;
+        padding: 0 15px 12px 15px;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+
+    .global-settings.collapsed .global-settings-content {
+        display: none;
     }
 
     .setting-group {
@@ -570,6 +605,63 @@ export const PANEL_STYLES = `
         text-transform: uppercase;
     }
 
+    /* X-axis entity autocomplete (inline in graph settings) */
+    .x-entity-autocomplete-wrapper {
+        position: relative;
+    }
+
+    .x-entity-autocomplete-wrapper input {
+        width: 140px;
+        padding: 6px 8px;
+        border-radius: 4px;
+        border: 1px solid var(--divider-color);
+        background: var(--card-background-color);
+        color: var(--primary-text-color);
+        font-size: 0.85rem;
+    }
+
+    .x-entity-autocomplete-list {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        width: 280px;
+        max-height: 200px;
+        overflow-y: auto;
+        background: var(--card-background-color);
+        border: 1px solid var(--divider-color);
+        border-radius: 6px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        z-index: 1001;
+        display: none;
+    }
+
+    .x-entity-autocomplete-list.show {
+        display: block;
+    }
+
+    .x-entity-autocomplete-list .autocomplete-item {
+        padding: 8px 10px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        border-bottom: 1px solid var(--divider-color);
+        font-size: 0.85rem;
+    }
+
+    .x-entity-autocomplete-list .autocomplete-item:last-child {
+        border-bottom: none;
+    }
+
+    .x-entity-autocomplete-list .autocomplete-item:hover {
+        background: var(--secondary-background-color);
+    }
+
+    .x-entity-autocomplete-list .autocomplete-item .domain-badge {
+        font-size: 0.65rem;
+        padding: 1px 4px;
+    }
+
     .entity-detected-info {
         margin-top: 10px;
         padding: 10px;
@@ -591,6 +683,24 @@ export const PANEL_STYLES = `
         gap: 10px;
         justify-content: flex-end;
         margin-top: 20px;
+    }
+
+    /* Settings modal content */
+    .settings-modal-content {
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+    }
+
+    .settings-modal-content .form-group {
+        margin-bottom: 0;
+    }
+
+    .form-hint {
+        display: block;
+        font-size: 0.75rem;
+        opacity: 0.6;
+        margin-top: 4px;
     }
 
     .coming-soon {
@@ -1260,14 +1370,52 @@ export const PANEL_STYLES = `
         transform: rotate(-90deg);
     }
 
+    /* Graph settings wrapper (collapsible) */
+    .graph-settings-wrapper {
+        background: var(--secondary-background-color);
+        border-radius: 6px;
+        margin-bottom: 10px;
+        overflow: hidden;
+    }
+
+    .graph-settings-header {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 10px;
+        cursor: pointer;
+        font-size: 0.85rem;
+        font-weight: 500;
+        transition: background 0.2s;
+    }
+
+    .graph-settings-header:hover {
+        background: rgba(var(--rgb-primary-color), 0.08);
+    }
+
+    .graph-settings-wrapper .collapse-indicator {
+        transition: transform 0.2s;
+        opacity: 0.6;
+        --mdc-icon-size: 16px;
+    }
+
+    .graph-settings-wrapper.collapsed .collapse-indicator {
+        transform: rotate(-90deg);
+    }
+
+    .graph-settings-body {
+        border-top: 1px solid var(--divider-color);
+    }
+
+    .graph-settings-wrapper.collapsed .graph-settings-body {
+        display: none;
+    }
+
     /* Graph settings row (per-graph) */
     .graph-settings {
         display: flex;
         gap: 10px;
         padding: 8px 10px;
-        background: var(--secondary-background-color);
-        border-radius: 6px;
-        margin-bottom: 10px;
         flex-wrap: wrap;
         align-items: center;
     }
@@ -1325,10 +1473,10 @@ export const PANEL_STYLES = `
         }
 
         /* Global settings - stack vertically on mobile */
-        .global-settings {
+        .global-settings-content {
             flex-direction: column;
             gap: 10px;
-            padding: 10px;
+            padding: 0 10px 10px 10px;
         }
 
         .setting-group {
