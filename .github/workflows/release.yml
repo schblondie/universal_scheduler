@@ -53,21 +53,26 @@ jobs:
 
       - name: Create release archive
         run: |
-          mkdir -p release/universal_scheduler/frontend
+          mkdir -p release/custom_components/universal_scheduler/frontend
           
-          # Copy necessary Python files
-          cp custom_components/universal_scheduler/*.py release/universal_scheduler/
-          cp custom_components/universal_scheduler/*.json release/universal_scheduler/
-          cp custom_components/universal_scheduler/*.yaml release/universal_scheduler/
-          cp custom_components/universal_scheduler/README.md release/universal_scheduler/ 2>/dev/null || true
+          # Copy root files
+          cp hacs.json release/
+          cp README.md release/
+          cp example.png release/
+          
+          # Copy necessary Python files and configs
+          cp custom_components/universal_scheduler/*.py release/custom_components/universal_scheduler/
+          cp custom_components/universal_scheduler/*.json release/custom_components/universal_scheduler/
+          cp custom_components/universal_scheduler/*.yaml release/custom_components/universal_scheduler/
+          cp custom_components/universal_scheduler/README.md release/custom_components/universal_scheduler/ 2>/dev/null || true
           
           # Copy only necessary JS files
-          cp custom_components/universal_scheduler/frontend/card.js release/universal_scheduler/frontend/
-          cp custom_components/universal_scheduler/frontend/panel.js release/universal_scheduler/frontend/
+          cp custom_components/universal_scheduler/frontend/card.js release/custom_components/universal_scheduler/frontend/
+          cp custom_components/universal_scheduler/frontend/panel.js release/custom_components/universal_scheduler/frontend/
           
           # Create zip archive
           cd release
-          zip -r universal_scheduler.zip universal_scheduler
+          zip -r universal_scheduler.zip .
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
