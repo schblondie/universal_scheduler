@@ -1251,11 +1251,17 @@ export class GraphHandler {
         let daysAhead = 0;
         const maxIterations = 7 * 24 * 60 * 60 / updateIntervalSec; // Max 1 week of intervals
 
+        // Start from current aligned slot, not the next one
+        // This ensures we show the correct "next change" timing
+        const currentSlotSeconds = Math.floor(currentSeconds / updateIntervalSec) * updateIntervalSec;
+
         for (let i = 0; i < maxIterations; i++) {
-            const checkSeconds = Math.ceil(currentSeconds / updateIntervalSec) * updateIntervalSec + (i * updateIntervalSec);
+            const checkSeconds = currentSlotSeconds + (i * updateIntervalSec);
             daysAhead = Math.floor(checkSeconds / 86400);
             const checkSecondsInDay = checkSeconds % 86400;
-            const checkMinutes = checkSecondsInDay / 60;
+            // Add tiny epsilon (~1ms) to ensure we see the new value at exact schedule points
+            // This matches the backend calculation for consistency
+            const checkMinutes = checkSecondsInDay / 60 + 0.0000167;
             const checkWeekday = (currentWeekday + daysAhead) % 7;
 
             // Skip if this weekday is not enabled

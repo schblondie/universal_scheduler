@@ -2387,8 +2387,8 @@ function interpolateValue(x, points, mode, minY, maxY) {
 
 /**
  * Interpolate with step-to-zero behavior
- * When stepToZero is enabled and a point has y=0, the line will immediately drop to 0
- * instead of interpolating down to it
+ * When stepToZero is enabled and a point has y=minY, the line will hold at the previous
+ * value until reaching that point, then immediately drop to minY
  */
 function interpolateValueWithStepToMin(x, points, mode, minY, maxY) {
     if (points.length === 0) return minY;
@@ -2412,15 +2412,21 @@ function interpolateValueWithStepToMin(x, points, mode, minY, maxY) {
     if (x <= points[0].x) return points[0].y;
     if (x >= points[points.length - 1].x) return points[points.length - 1].y;
 
-    // Step-to-min logic: if next point is at/below min, stay at min until the change point
-    if (p2.y === minY) {
-        return minY;
+    // Step-to-min logic: if next point is at/below min, hold at p1's value until we reach p2
+    // Then immediately drop to min at p2's position
+    if (p2.y <= minY) {
+        // At or past p2's position, drop to min
+        if (x >= p2.x) {
+            return minY;
+        }
+        // Before p2, hold at p1's value (no interpolation toward min)
+        return p1.y;
     }
-    if (p1.y === minY) {
-        // If coming from min, stay flat until we cross the point, then follow normal interpolation
+
+    // If coming up from min, delay the rise slightly
+    if (p1.y <= minY) {
         const t = (x - p1.x) / (p2.x - p1.x);
         if (t < 0.01) return minY;
-        return interpolateValue(x, points, mode, minY, maxY);
     }
 
     // Otherwise, use normal interpolation
@@ -3860,11 +3866,17 @@ class GraphHandler {
         let daysAhead = 0;
         const maxIterations = 7 * 24 * 60 * 60 / updateIntervalSec; // Max 1 week of intervals
 
+        // Start from current aligned slot, not the next one
+        // This ensures we show the correct "next change" timing
+        const currentSlotSeconds = Math.floor(currentSeconds / updateIntervalSec) * updateIntervalSec;
+
         for (let i = 0; i < maxIterations; i++) {
-            const checkSeconds = Math.ceil(currentSeconds / updateIntervalSec) * updateIntervalSec + (i * updateIntervalSec);
+            const checkSeconds = currentSlotSeconds + (i * updateIntervalSec);
             daysAhead = Math.floor(checkSeconds / 86400);
             const checkSecondsInDay = checkSeconds % 86400;
-            const checkMinutes = checkSecondsInDay / 60;
+            // Add tiny epsilon (~1ms) to ensure we see the new value at exact schedule points
+            // This matches the backend calculation for consistency
+            const checkMinutes = checkSecondsInDay / 60 + 0.0000167;
             const checkWeekday = (currentWeekday + daysAhead) % 7;
 
             // Skip if this weekday is not enabled
