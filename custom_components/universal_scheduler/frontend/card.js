@@ -2247,9 +2247,31 @@ const CARD_STYLES = `
     }
 
     .graph-selector-btn.active {
-        background: var(--primary-color);
+        background: var(--primary-color, #03a9f4);
         color: white;
-        border-color: var(--primary-color);
+        border-color: var(--primary-color, #03a9f4);
+    }
+
+    .add-graph-btn {
+        padding: 6px 12px;
+        border-radius: 16px;
+        border: 1px dashed var(--primary-color, #03a9f4);
+        background: transparent;
+        color: var(--primary-color, #03a9f4);
+        font-size: 0.85rem;
+        cursor: pointer;
+        transition: all 0.2s;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+
+    .add-graph-btn:hover {
+        background: rgba(var(--rgb-primary-color, 3, 169, 244), 0.1);
+    }
+
+    .add-graph-btn ha-icon {
+        --mdc-icon-size: 16px;
     }
 
     .card-graph-wrapper {
@@ -2257,6 +2279,7 @@ const CARD_STYLES = `
         display: flex;
         height: var(--graph-height, 200px);
         margin-bottom: 10px;
+        padding-top: 20px; /* Space for NOW label */
     }
 
     .card-graph-y-axis {
@@ -2274,9 +2297,9 @@ const CARD_STYLES = `
     .card-graph-container {
         flex: 1;
         position: relative;
-        background: var(--secondary-background-color);
+        background: var(--secondary-background-color, var(--card-background-color, #fafafa));
         border-radius: 8px;
-        overflow: hidden;
+        overflow: visible;
     }
 
     .card-graph-x-axis {
@@ -2306,8 +2329,8 @@ const CARD_STYLES = `
         right: 0;
         bottom: 0;
         background-image:
-            linear-gradient(to right, var(--divider-color) 1px, transparent 1px),
-            linear-gradient(to bottom, var(--divider-color) 1px, transparent 1px);
+            linear-gradient(to right, var(--divider-color, rgba(0,0,0,0.12)) 1px, transparent 1px),
+            linear-gradient(to bottom, var(--divider-color, rgba(0,0,0,0.12)) 1px, transparent 1px);
         background-size: 25% 25%;
         opacity: 0.3;
     }
@@ -2323,12 +2346,12 @@ const CARD_STYLES = `
 
     .curve-line {
         fill: none;
-        stroke: var(--primary-color);
+        stroke: var(--primary-color, #03a9f4);
         stroke-width: 2;
     }
 
     .fill-area {
-        fill: rgba(var(--rgb-primary-color), 0.15);
+        fill: rgba(var(--rgb-primary-color, 3, 169, 244), 0.15);
         stroke: none;
     }
 
@@ -2336,8 +2359,8 @@ const CARD_STYLES = `
         position: absolute;
         width: 14px;
         height: 14px;
-        background: var(--primary-color);
-        border: 2px solid var(--card-background-color);
+        background: var(--primary-color, #03a9f4);
+        border: 2px solid var(--card-background-color, #fff);
         border-radius: 50%;
         cursor: grab;
         transform: translate(-50%, -50%);
@@ -2356,31 +2379,27 @@ const CARD_STYLES = `
         z-index: 11;
     }
 
+    /* Current time marker - matches panel styles */
     .current-time-marker {
         position: absolute;
         top: 0;
         bottom: 0;
-        left: 0;
-        width: 3px;
-        background: var(--error-color, #f44336);
-        z-index: 20;
+        width: 2px;
+        background: var(--error-color, #db4437);
+        z-index: 5;
         pointer-events: none;
-        box-shadow: 0 0 6px 1px rgba(244, 67, 54, 0.7);
-        min-height: 100%;
     }
 
     .current-time-marker::before {
-        content: '';
+        content: 'NOW';
         position: absolute;
-        top: -8px;
+        top: -18px;
         left: 50%;
         transform: translateX(-50%);
-        width: 14px;
-        height: 14px;
-        background: var(--error-color, #f44336);
-        border-radius: 50%;
-        box-shadow: 0 0 6px rgba(244, 67, 54, 0.7);
-        border: 2px solid white;
+        font-size: 0.6rem;
+        font-weight: 600;
+        color: var(--error-color, #db4437);
+        white-space: nowrap;
     }
 
     .current-value-row {
@@ -2400,16 +2419,16 @@ const CARD_STYLES = `
 
     .current-value-row .value {
         font-weight: 600;
-        color: var(--primary-color);
+        color: var(--primary-color, #03a9f4);
     }
 
     .current-value-row button {
         margin-left: auto;
         padding: 4px 10px;
         border-radius: 4px;
-        border: 1px solid var(--divider-color);
-        background: var(--secondary-background-color);
-        color: var(--primary-text-color);
+        border: 1px solid var(--divider-color, rgba(0,0,0,0.12));
+        background: var(--secondary-background-color, var(--card-background-color, #fafafa));
+        color: var(--primary-text-color, #212121);
         font-size: 0.8rem;
         cursor: pointer;
         display: flex;
@@ -2418,7 +2437,7 @@ const CARD_STYLES = `
     }
 
     .current-value-row button:hover {
-        background: var(--primary-color);
+        background: var(--primary-color, #03a9f4);
         color: white;
     }
 
@@ -2489,6 +2508,28 @@ const CARD_STYLES = `
         background: var(--card-background-color);
         color: var(--primary-text-color);
         font-size: 0.8rem;
+    }
+
+    .card-graph-settings .danger {
+        padding: 4px 8px;
+        border-radius: 4px;
+        border: 1px solid var(--error-color, #db4437);
+        background: transparent;
+        color: var(--error-color, #db4437);
+        font-size: 0.75rem;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+
+    .card-graph-settings .danger:hover {
+        background: var(--error-color, #db4437);
+        color: white;
+    }
+
+    .card-graph-settings .danger ha-icon {
+        --mdc-icon-size: 14px;
     }
 
     /* Points editor */
@@ -3311,6 +3352,9 @@ class UniversalSchedulerCard extends HTMLElement {
             });
         }
 
+        // Get available numeric attributes for the entity
+        const availableAttributes = getNumericAttributes(this._hass, entityId);
+
         return {
             entityId: entityId,
             name: data.name || entityId,
@@ -3319,7 +3363,8 @@ class UniversalSchedulerCard extends HTMLElement {
             enabled: data.enabled !== false,
             updateInterval: data.update_interval ?? 300,
             graphsPerRow: data.graphs_per_row || 1,
-            graphs: graphs
+            graphs: graphs,
+            availableAttributes: availableAttributes
         };
     }
 
@@ -3463,13 +3508,18 @@ class UniversalSchedulerCard extends HTMLElement {
                 </div>
             ` : ''}
 
-            ${graphs.length > 1 && this._config.graph_index === undefined ? `
+            ${graphs.length > 1 || (allowEdit && this._config.graph_index === undefined) ? `
                 <div class="graph-selector">
                     ${graphs.map((g, i) => `
                         <button class="graph-selector-btn ${i === graphIndex ? 'active' : ''}" data-index="${i}">
                             ${g.label}
                         </button>
                     `).join('')}
+                    ${allowEdit && this._config.graph_index === undefined ? `
+                        <button class="add-graph-btn" data-action="addGraph">
+                            <ha-icon icon="mdi:plus"></ha-icon> Add
+                        </button>
+                    ` : ''}
                 </div>
             ` : ''}
 
@@ -3497,7 +3547,7 @@ class UniversalSchedulerCard extends HTMLElement {
                         <path class="fill-area"></path>
                         <path class="curve-line"></path>
                     </svg>
-                    <div class="current-time-marker" data-time-marker style="display: ${isEntityBased ? 'none' : 'block'};"></div>
+                    <div class="current-time-marker" data-time-marker></div>
                 </div>
             </div>
             <div class="card-graph-x-axis">
@@ -3526,6 +3576,16 @@ class UniversalSchedulerCard extends HTMLElement {
         const isEntityBased = graph.xAxisType === 'entity';
         const collapsed = !this._isEditing ? 'collapsed' : '';
 
+        // Get available attributes for the entity
+        const attributes = this._scheduler?.availableAttributes || [];
+        const attributeOptions = [`<option value="" ${!graph.attribute ? 'selected' : ''}>State</option>`]
+            .concat(
+                attributes.map(attr => `<option value="${attr}" ${graph.attribute === attr ? 'selected' : ''}>${attr}</option>`)
+            ).join('');
+
+        const graphs = this._scheduler?.graphs || [];
+        const canDelete = graphs.length > 1;
+
         return `
             <div class="card-graph-settings-wrapper ${collapsed}">
                 <div class="card-graph-settings-header" data-action="toggleSettings">
@@ -3547,6 +3607,12 @@ class UniversalSchedulerCard extends HTMLElement {
                             <div class="toggle-switch small ${graph.stepToZero ? 'active' : ''}" data-setting="stepToZero"></div>
                         </div>
                         <div class="input-group">
+                            <label>Attribute</label>
+                            <select data-setting="attribute">
+                                ${attributeOptions}
+                            </select>
+                        </div>
+                        <div class="input-group">
                             <label>Y-Min</label>
                             <input type="number" data-setting="minY" value="${graph.minY}" style="width: 60px;">
                         </div>
@@ -3566,7 +3632,7 @@ class UniversalSchedulerCard extends HTMLElement {
                             </select>
                         </div>
                     </div>
-                    <div class="card-graph-settings" style="margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--divider-color);">
+                    <div class="card-graph-settings" style="margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--divider-color, rgba(0,0,0,0.12));">
                         <div class="input-group">
                             <label>X-Axis</label>
                             <select data-setting="xAxisType">
@@ -3612,6 +3678,11 @@ class UniversalSchedulerCard extends HTMLElement {
                                 `}
                             </select>
                         </div>
+                        ${canDelete ? `
+                            <button class="danger" data-action="deleteGraph" title="Delete this graph">
+                                <ha-icon icon="mdi:delete"></ha-icon> Delete
+                            </button>
+                        ` : ''}
                     </div>
                 </div>
             </div>
@@ -3759,6 +3830,16 @@ class UniversalSchedulerCard extends HTMLElement {
                 this._selectedGraphIndex = parseInt(btn.dataset.index);
                 this._render();
             });
+        });
+
+        // Add graph button
+        container.querySelector('[data-action="addGraph"]')?.addEventListener('click', () => {
+            this._addGraph();
+        });
+
+        // Delete graph button
+        container.querySelector('[data-action="deleteGraph"]')?.addEventListener('click', () => {
+            this._deleteGraph();
         });
 
         // Weekday buttons
@@ -4012,6 +4093,7 @@ class UniversalSchedulerCard extends HTMLElement {
         // Map frontend setting names to internal names
         const settingMap = {
             'mode': 'mode',
+            'attribute': 'attribute',
             'stepToZero': 'stepToZero',
             'minY': 'minY',
             'maxY': 'maxY',
@@ -4023,6 +4105,11 @@ class UniversalSchedulerCard extends HTMLElement {
             'xAxisMax': 'xAxisMax',
             'xAxisUnit': 'xAxisUnit'
         };
+
+        // Handle attribute special - empty string means null
+        if (setting === 'attribute' && value === '') {
+            value = null;
+        }
 
         const internalSetting = settingMap[setting] || setting;
         this._stageChange(graphIndex, internalSetting, value);
@@ -4123,50 +4210,131 @@ class UniversalSchedulerCard extends HTMLElement {
         this._render();
     }
 
+    async _addGraph() {
+        if (!this._scheduler) return;
+
+        const info = this._getEntityInfo(this._scheduler.entityId);
+        const newIndex = this._scheduler.graphs.length + 1;
+
+        const newGraph = {
+            id: `graph_${Date.now()}`,
+            label: `Schedule ${newIndex}`,
+            weekdays: [0, 1, 2, 3, 4, 5, 6],
+            attribute: null,
+            mode: 'linear',
+            minY: info.minY,
+            maxY: info.maxY,
+            xSnap: undefined,
+            ySnap: 0,
+            stepToZero: false,
+            xAxisType: 'time',
+            xAxisEntity: null,
+            points: [{ x: 0, y: info.minY }, { x: 1440, y: info.minY }],
+            unit: info.unit || '',
+            zoomLevel: 1,
+            zoomOffset: 0
+        };
+
+        // Add the new graph to the local scheduler
+        this._scheduler.graphs.push(newGraph);
+
+        // Save using service call
+        try {
+            await this._saveSchedulerConfig();
+
+            // Select the new graph
+            this._selectedGraphIndex = this._scheduler.graphs.length - 1;
+            this._render();
+        } catch (e) {
+            // Remove the graph on failure
+            this._scheduler.graphs.pop();
+            console.error('Failed to add graph:', e);
+        }
+    }
+
+    async _deleteGraph() {
+        if (!this._scheduler) return;
+
+        const graphs = this._scheduler.graphs || [];
+        if (graphs.length <= 1) return; // Can't delete the last graph
+
+        const graphIndex = this._getGraphIndex();
+
+        // Store the deleted graph for potential recovery
+        const deletedGraph = graphs[graphIndex];
+
+        // Remove from local scheduler
+        this._scheduler.graphs.splice(graphIndex, 1);
+
+        // Save using service call
+        try {
+            await this._saveSchedulerConfig();
+
+            // Adjust selected index
+            if (this._selectedGraphIndex >= this._scheduler.graphs.length) {
+                this._selectedGraphIndex = this._scheduler.graphs.length - 1;
+            }
+            this._render();
+        } catch (e) {
+            // Restore the graph on failure
+            this._scheduler.graphs.splice(graphIndex, 0, deletedGraph);
+            console.error('Failed to delete graph:', e);
+        }
+    }
+
+    async _saveSchedulerConfig() {
+        if (!this._scheduler) return;
+
+        // Convert frontend graphs format to backend format
+        const graphs = this._scheduler.graphs.map(graph => ({
+            id: graph.id,
+            label: graph.label || 'Schedule',
+            weekdays: graph.weekdays || [0, 1, 2, 3, 4, 5, 6],
+            attribute: graph.attribute || null,
+            mode: graph.mode || 'linear',
+            min_y: graph.minY,
+            max_y: graph.maxY,
+            x_snap: graph.xSnap === undefined ? null : graph.xSnap,
+            y_snap: graph.ySnap || 0,
+            step_to_zero: graph.stepToZero || false,
+            x_axis_type: graph.xAxisType || 'time',
+            x_axis_entity: graph.xAxisEntity || null,
+            x_axis_min: graph.xAxisMin ?? null,
+            x_axis_max: graph.xAxisMax ?? null,
+            x_axis_unit: graph.xAxisUnit || null,
+            points: graph.points || []
+        }));
+
+        // Use the target entity (e.g., light.test_lamp), not the switch entity
+        // This matches the panel behavior - the service expects the target entity as entity_id
+        await this._hass.callService('universal_scheduler', 'set_schedule_config', {
+            entity_id: this._scheduler.entityId,
+            target_entity: this._scheduler.entityId,
+            domain: this._scheduler.domain,
+            name: this._scheduler.name,
+            update_interval: this._scheduler.updateInterval || 300,
+            enabled: this._scheduler.enabled,
+            graphs_per_row: this._scheduler.graphsPerRow || 1,
+            graphs: graphs
+        });
+    };
+
     async _saveChanges() {
         if (!this._pendingChanges || !this._scheduler) return;
 
         const graphIndex = this._pendingChanges.graphIndex;
 
         try {
-            // Get current scheduler config
-            const result = await this._hass.callWS({
-                type: 'universal_scheduler/get_schedulers'
-            });
-
-            const schedulers = result.schedulers || {};
-            const config = schedulers[this._scheduler.entityId];
-
-            if (!config?.graphs?.[graphIndex]) return;
-
-            // Map internal names to backend names and apply changes
-            const backendMap = {
-                'mode': 'mode',
-                'stepToZero': 'step_to_zero',
-                'minY': 'min_y',
-                'maxY': 'max_y',
-                'ySnap': 'y_snap',
-                'xSnap': 'x_snap',
-                'xAxisType': 'x_axis_type',
-                'xAxisEntity': 'x_axis_entity',
-                'xAxisMin': 'x_axis_min',
-                'xAxisMax': 'x_axis_max',
-                'xAxisUnit': 'x_axis_unit',
-                'weekdays': 'weekdays',
-                'points': 'points'
-            };
+            // Apply pending changes to the local scheduler graph
+            const graph = this._scheduler.graphs[graphIndex];
+            if (!graph) return;
 
             for (const [key, value] of Object.entries(this._pendingChanges.changes)) {
-                const backendKey = backendMap[key] || key;
-                config.graphs[graphIndex][backendKey] = value;
+                graph[key] = value;
             }
 
-            // Save back
-            await this._hass.callWS({
-                type: 'universal_scheduler/set_config',
-                entity_id: this._scheduler.entityId,
-                config: config
-            });
+            // Save using service call
+            await this._saveSchedulerConfig();
 
             // Clear pending changes
             this._pendingChanges = null;
@@ -4174,7 +4342,7 @@ class UniversalSchedulerCard extends HTMLElement {
             this._redoStack = [];
             this._originalState = null;
 
-            // Reload data
+            // Reload data to sync with backend
             await this._loadSchedulerData();
         } catch (e) {
             console.error('Failed to save changes:', e);
@@ -4273,8 +4441,8 @@ class UniversalSchedulerCard extends HTMLElement {
         if (!this._scheduler || !this._hass) return;
 
         try {
-            // Toggle the switch entity
-            const switchEntity = `switch.universal_scheduler_${this._scheduler.entityId.replace(/\./g, '_')}`;
+            // Toggle the switch entity - use the entity from config
+            const switchEntity = this._config.entity;
             await this._hass.callService('switch', this._scheduler.enabled ? 'turn_off' : 'turn_on', {
                 entity_id: switchEntity
             });
