@@ -1,7 +1,7 @@
 # Universal Scheduler
 
 A Home Assistant integration for creating and managing customizable scheduler curves. This allows you to define complex time-based control patterns for lights, climate systems, and other entities using an interactive graph interface.
-
+![Image](example.png)
 ## Features
 
 - **Interactive Graph Editor**: Draw scheduler curves with click-to-add points and drag-to-adjust points
