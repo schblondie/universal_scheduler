@@ -17,59 +17,68 @@ export const PANEL_TEMPLATE = `
         </div>
     </div>
 
-    <div class="global-settings">
-        <div class="setting-group">
-            <label>X-Snap:</label>
-            <select id="globalSnapSelect">
-                <option value="0">Off</option>
-                <option value="5">5 min</option>
-                <option value="10">10 min</option>
-                <option value="15">15 min</option>
-                <option value="30" selected>30 min</option>
-                <option value="60">1 hour</option>
-            </select>
+    <div class="global-settings collapsed">
+        <div class="global-settings-header" id="globalSettingsToggle">
+            <ha-icon class="collapse-indicator" icon="mdi:chevron-down"></ha-icon>
+            <span>Global Settings</span>
         </div>
-        <div class="setting-group">
-            <label>Graph Display:</label>
-            <select id="graphDisplayMode">
-                <option value="single" selected>One at a time</option>
-                <option value="toggle">Click to toggle</option>
-                <option value="all">Show all</option>
-            </select>
-        </div>
-        <div class="setting-group">
-            <label>Per Page:</label>
-            <select id="itemsPerPage">
-                <option value="5">5</option>
-                <option value="10">10</option>
-                <option value="30" selected>30</option>
-                <option value="100">100</option>
-                <option value="0">Unlimited</option>
-            </select>
-        </div>
-        <div class="setting-group">
-            <label>Columns:</label>
-            <select id="columnsCount">
-                <option value="1" selected>1</option>
-                <option value="2">2</option>
-                <option value="3">3</option>
-                <option value="4">4</option>
-                <option value="5">5</option>
-                <option value="6">6</option>
-                <option value="7">7</option>
-                <option value="8">8</option>
-            </select>
-        </div>
-        <div class="setting-group">
-            <label>Graph Height:</label>
-            <select id="graphHeight">
-                <option value="150">150px</option>
-                <option value="200">200px</option>
-                <option value="250" selected>250px</option>
-                <option value="300">300px</option>
-                <option value="400">400px</option>
-                <option value="500">500px</option>
-            </select>
+        <div class="global-settings-content">
+            <div class="setting-group">
+                <label>X-Snap:</label>
+                <select id="globalSnapSelect">
+                    <option value="0">Off</option>
+                    <option value="0.1">0.1</option>
+                    <option value="0.5">0.5</option>
+                    <option value="1">1</option>
+                    <option value="5">5 min</option>
+                    <option value="10">10 min</option>
+                    <option value="15">15 min</option>
+                    <option value="30" selected>30 min</option>
+                    <option value="60">1 hour</option>
+                </select>
+            </div>
+            <div class="setting-group">
+                <label>Graph Display:</label>
+                <select id="graphDisplayMode">
+                    <option value="single" selected>One at a time</option>
+                    <option value="toggle">Click to toggle</option>
+                    <option value="all">Show all</option>
+                </select>
+            </div>
+            <div class="setting-group">
+                <label>Per Page:</label>
+                <select id="itemsPerPage">
+                    <option value="5">5</option>
+                    <option value="10">10</option>
+                    <option value="30" selected>30</option>
+                    <option value="100">100</option>
+                    <option value="0">Unlimited</option>
+                </select>
+            </div>
+            <div class="setting-group">
+                <label>Columns:</label>
+                <select id="columnsCount">
+                    <option value="1" selected>1</option>
+                    <option value="2">2</option>
+                    <option value="3">3</option>
+                    <option value="4">4</option>
+                    <option value="5">5</option>
+                    <option value="6">6</option>
+                    <option value="7">7</option>
+                    <option value="8">8</option>
+                </select>
+            </div>
+            <div class="setting-group">
+                <label>Graph Height:</label>
+                <select id="graphHeight">
+                    <option value="150">150px</option>
+                    <option value="200">200px</option>
+                    <option value="250" selected>250px</option>
+                    <option value="300">300px</option>
+                    <option value="400">400px</option>
+                    <option value="500">500px</option>
+                </select>
+            </div>
         </div>
     </div>
 
@@ -141,10 +150,32 @@ export const PANEL_TEMPLATE = `
     <div class="modal-overlay" id="settingsModal">
         <div class="modal-dialog">
             <h3>Scheduler Settings</h3>
-            <div class="coming-soon">
-                <ha-icon icon="mdi:wrench-clock"></ha-icon>
-                <p>Coming soon!</p>
-                <p style="opacity: 0.7; font-size: 0.9rem;">Advanced scheduler settings will be available here.</p>
+            <div class="settings-modal-content">
+                <div class="form-group">
+                    <label>Update Interval</label>
+                    <select id="settingsUpdateInterval">
+                        <option value="1">1 s</option>
+                        <option value="5">5 s</option>
+                        <option value="10">10 s</option>
+                        <option value="30">30 s</option>
+                        <option value="60">1 min</option>
+                        <option value="300">5 min</option>
+                        <option value="600">10 min</option>
+                        <option value="900">15 min</option>
+                        <option value="1800">30 min</option>
+                        <option value="3600">1 hour</option>
+                    </select>
+                    <span class="form-hint">How often the scheduler applies values to the target entity</span>
+                </div>
+                <div class="form-group">
+                    <label>Graphs per Row</label>
+                    <select id="settingsGraphsPerRow">
+                        <option value="1">1</option>
+                        <option value="2">2</option>
+                        <option value="3">3</option>
+                    </select>
+                    <span class="form-hint">Number of graphs displayed side by side</span>
+                </div>
             </div>
             <div class="modal-buttons">
                 <button class="secondary" id="settingsCloseBtn">Close</button>
@@ -191,85 +222,98 @@ export function createGraphHTML(graph, graphIndex, scheduler) {
             </div>
 
             <div class="graph-content">
-                <div class="graph-settings">
-                    <div class="input-group">
-                        <label>Mode</label>
-                        <select data-graph-setting="mode">
-                            <option value="linear" ${graph.mode === 'linear' ? 'selected' : ''}>Linear</option>
-                            <option value="smooth" ${graph.mode === 'smooth' ? 'selected' : ''}>Smooth</option>
-                            <option value="step" ${graph.mode === 'step' ? 'selected' : ''}>Step</option>
-                        </select>
+                <div class="graph-settings-wrapper collapsed">
+                    <div class="graph-settings-header" data-action="toggleGraphSettings">
+                        <ha-icon class="collapse-indicator" icon="mdi:chevron-down"></ha-icon>
+                        <span>Graph Settings</span>
                     </div>
-                    <div class="input-group">
-                        <label>Step to min</label>
-                        <div class="toggle-switch small ${graph.stepToZero ? 'active' : ''}" data-graph-setting="stepToZero"></div>
-                    </div>
-                    <div class="input-group">
-                        <label>Y-Min</label>
-                        <input type="number" data-graph-setting="minY" value="${graph.minY}" style="width: 70px;">
-                    </div>
-                    <div class="input-group">
-                        <label>Y-Max</label>
-                        <input type="number" data-graph-setting="maxY" value="${graph.maxY}" style="width: 70px;">
-                    </div>
-                    <div class="input-group">
-                        <label>Y-Snap</label>
-                        <select data-graph-setting="ySnap">
-                            <option value="0" ${ySnapValue === 0 ? 'selected' : ''}>Off</option>
-                            <option value="0.1" ${ySnapValue === 0.1 ? 'selected' : ''}>0.1</option>
-                            <option value="0.5" ${ySnapValue === 0.5 ? 'selected' : ''}>0.5</option>
-                            <option value="1" ${ySnapValue === 1 ? 'selected' : ''}>1</option>
-                            <option value="5" ${ySnapValue === 5 ? 'selected' : ''}>5</option>
-                            <option value="10" ${ySnapValue === 10 ? 'selected' : ''}>10</option>
-                        </select>
-                    </div>
-                    <div class="input-group">
-                        <label>X-Snap</label>
-                        <select data-graph-setting="xSnap">
-                            <option value="" ${graph.xSnap === undefined || graph.xSnap === null ? 'selected' : ''}>Global</option>
-                            <option value="0" ${graph.xSnap === 0 ? 'selected' : ''}>Off</option>
-                            <option value="1" ${graph.xSnap === 1 ? 'selected' : ''}>1 min</option>
-                            <option value="5" ${graph.xSnap === 5 ? 'selected' : ''}>5 min</option>
-                            <option value="10" ${graph.xSnap === 10 ? 'selected' : ''}>10 min</option>
-                            <option value="15" ${graph.xSnap === 15 ? 'selected' : ''}>15 min</option>
-                            <option value="30" ${graph.xSnap === 30 ? 'selected' : ''}>30 min</option>
-                            <option value="60" ${graph.xSnap === 60 ? 'selected' : ''}>1 hour</option>
-                        </select>
-                    </div>
-                    <div class="input-group">
-                        <label>Attribute</label>
-                        <select data-graph-setting="attribute">
-                            ${attributeOptions}
-                        </select>
-                    </div>
-                    <button class="danger small" data-action="deleteGraph" title="Delete this graph">
-                        <ha-icon icon="mdi:delete"></ha-icon>
-                    </button>
-                </div>
+                    <div class="graph-settings-body">
+                        <div class="graph-settings">
+                            <div class="input-group">
+                                <label>Mode</label>
+                                <select data-graph-setting="mode">
+                                    <option value="linear" ${graph.mode === 'linear' ? 'selected' : ''}>Linear</option>
+                                    <option value="smooth" ${graph.mode === 'smooth' ? 'selected' : ''}>Smooth</option>
+                                    <option value="step" ${graph.mode === 'step' ? 'selected' : ''}>Step</option>
+                                </select>
+                            </div>
+                            <div class="input-group">
+                                <label>Step to min</label>
+                                <div class="toggle-switch small ${graph.stepToZero ? 'active' : ''}" data-graph-setting="stepToZero"></div>
+                            </div>
+                            <div class="input-group">
+                                <label>Y-Min</label>
+                                <input type="number" data-graph-setting="minY" value="${graph.minY}" style="width: 70px;">
+                            </div>
+                            <div class="input-group">
+                                <label>Y-Max</label>
+                                <input type="number" data-graph-setting="maxY" value="${graph.maxY}" style="width: 70px;">
+                            </div>
+                            <div class="input-group">
+                                <label>Y-Snap</label>
+                                <select data-graph-setting="ySnap">
+                                    <option value="0" ${ySnapValue === 0 ? 'selected' : ''}>Off</option>
+                                    <option value="0.1" ${ySnapValue === 0.1 ? 'selected' : ''}>0.1</option>
+                                    <option value="0.5" ${ySnapValue === 0.5 ? 'selected' : ''}>0.5</option>
+                                    <option value="1" ${ySnapValue === 1 ? 'selected' : ''}>1</option>
+                                    <option value="5" ${ySnapValue === 5 ? 'selected' : ''}>5</option>
+                                    <option value="10" ${ySnapValue === 10 ? 'selected' : ''}>10</option>
+                                </select>
+                            </div>
+                            <div class="input-group">
+                                <label>X-Snap</label>
+                                <select data-graph-setting="xSnap">
+                                    <option value="" ${graph.xSnap === undefined || graph.xSnap === null ? 'selected' : ''}>Global</option>
+                                    <option value="0" ${graph.xSnap === 0 ? 'selected' : ''}>Off</option>
+                                    <option value="0.1" ${graph.xSnap === 0.1 ? 'selected' : ''}>0.1</option>
+                                    <option value="0.5" ${graph.xSnap === 0.5 ? 'selected' : ''}>0.5</option>
+                                    <option value="1" ${graph.xSnap === 1 ? 'selected' : ''}>1</option>
+                                    <option value="5" ${graph.xSnap === 5 ? 'selected' : ''}>5</option>
+                                    <option value="10" ${graph.xSnap === 10 ? 'selected' : ''}>10</option>
+                                    <option value="15" ${graph.xSnap === 15 ? 'selected' : ''}>15</option>
+                                    <option value="30" ${graph.xSnap === 30 ? 'selected' : ''}>30</option>
+                                    <option value="60" ${graph.xSnap === 60 ? 'selected' : ''}>60</option>
+                                </select>
+                            </div>
+                            <div class="input-group">
+                                <label>Attribute</label>
+                                <select data-graph-setting="attribute">
+                                    ${attributeOptions}
+                                </select>
+                            </div>
+                            <button class="danger small" data-action="deleteGraph" title="Delete this graph">
+                                <ha-icon icon="mdi:delete"></ha-icon>
+                            </button>
+                        </div>
 
-                <div class="graph-settings x-axis-settings">
-                    <div class="input-group">
-                        <label>X-Axis</label>
-                        <select data-graph-setting="xAxisType">
-                            <option value="time" ${(graph.xAxisType || 'time') === 'time' ? 'selected' : ''}>Time (24h)</option>
-                            <option value="entity" ${graph.xAxisType === 'entity' ? 'selected' : ''}>Entity Value</option>
-                        </select>
-                    </div>
-                    <div class="input-group x-axis-entity-group" style="display: ${graph.xAxisType === 'entity' ? 'flex' : 'none'};">
-                        <label>X Entity</label>
-                        <input type="text" data-graph-setting="xAxisEntity" value="${graph.xAxisEntity || ''}" placeholder="sensor.lux" style="width: 140px;">
-                    </div>
-                    <div class="input-group x-axis-min-group" style="display: ${graph.xAxisType === 'entity' ? 'flex' : 'none'};">
-                        <label>X-Min</label>
-                        <input type="number" data-graph-setting="xAxisMin" value="${graph.xAxisMin ?? 0}" style="width: 70px;">
-                    </div>
-                    <div class="input-group x-axis-max-group" style="display: ${graph.xAxisType === 'entity' ? 'flex' : 'none'};">
-                        <label>X-Max</label>
-                        <input type="number" data-graph-setting="xAxisMax" value="${graph.xAxisMax ?? 100}" style="width: 70px;">
-                    </div>
-                    <div class="input-group x-axis-unit-group" style="display: ${graph.xAxisType === 'entity' ? 'flex' : 'none'};">
-                        <label>X Unit</label>
-                        <input type="text" data-graph-setting="xAxisUnit" value="${graph.xAxisUnit || ''}" placeholder="lx" style="width: 50px;">
+                        <div class="graph-settings x-axis-settings">
+                            <div class="input-group">
+                                <label>X-Axis</label>
+                                <select data-graph-setting="xAxisType">
+                                    <option value="time" ${(graph.xAxisType || 'time') === 'time' ? 'selected' : ''}>Time (24h)</option>
+                                    <option value="entity" ${graph.xAxisType === 'entity' ? 'selected' : ''}>Entity Value</option>
+                                </select>
+                            </div>
+                            <div class="input-group x-axis-entity-group" style="display: ${graph.xAxisType === 'entity' ? 'flex' : 'none'};">
+                                <label>X Entity</label>
+                                <div class="x-entity-autocomplete-wrapper">
+                                    <input type="text" data-graph-setting="xAxisEntity" value="${graph.xAxisEntity || ''}" placeholder="sensor.lux" autocomplete="off">
+                                    <div class="x-entity-autocomplete-list"></div>
+                                </div>
+                            </div>
+                            <div class="input-group x-axis-min-group" style="display: ${graph.xAxisType === 'entity' ? 'flex' : 'none'};">
+                                <label>X-Min</label>
+                                <input type="number" data-graph-setting="xAxisMin" value="${graph.xAxisMin ?? 0}" style="width: 70px;">
+                            </div>
+                            <div class="input-group x-axis-max-group" style="display: ${graph.xAxisType === 'entity' ? 'flex' : 'none'};">
+                                <label>X-Max</label>
+                                <input type="number" data-graph-setting="xAxisMax" value="${graph.xAxisMax ?? 100}" style="width: 70px;">
+                            </div>
+                            <div class="input-group x-axis-unit-group" style="display: ${graph.xAxisType === 'entity' ? 'flex' : 'none'};">
+                                <label>X Unit</label>
+                                <input type="text" data-graph-setting="xAxisUnit" value="${graph.xAxisUnit || ''}" placeholder="lx" style="width: 50px;">
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -383,32 +427,6 @@ export function createSchedulerCardHTML(scheduler, domainIcon) {
         </div>
 
         <div class="scheduler-body">
-            <div class="scheduler-top-settings">
-                <div class="input-group">
-                    <label>Update Interval</label>
-                    <select data-setting="updateInterval">
-                        <option value="1" ${scheduler.updateInterval === 1 ? 'selected' : ''}>1 s</option>
-                        <option value="5" ${scheduler.updateInterval === 5 ? 'selected' : ''}>5 s</option>
-                        <option value="10" ${scheduler.updateInterval === 10 ? 'selected' : ''}>10 s</option>
-                        <option value="30" ${scheduler.updateInterval === 30 ? 'selected' : ''}>30 s</option>
-                        <option value="60" ${scheduler.updateInterval === 60 ? 'selected' : ''}>1 min</option>
-                        <option value="300" ${(scheduler.updateInterval === 300 || !scheduler.updateInterval) ? 'selected' : ''}>5 min</option>
-                        <option value="600" ${scheduler.updateInterval === 600 ? 'selected' : ''}>10 min</option>
-                        <option value="900" ${scheduler.updateInterval === 900 ? 'selected' : ''}>15 min</option>
-                        <option value="1800" ${scheduler.updateInterval === 1800 ? 'selected' : ''}>30 min</option>
-                        <option value="3600" ${scheduler.updateInterval === 3600 ? 'selected' : ''}>1 hour</option>
-                    </select>
-                </div>
-                <div class="input-group">
-                    <label>Graphs/Row</label>
-                    <select data-setting="graphsPerRow">
-                        <option value="1" ${(scheduler.graphsPerRow || 1) === 1 ? 'selected' : ''}>1</option>
-                        <option value="2" ${scheduler.graphsPerRow === 2 ? 'selected' : ''}>2</option>
-                        <option value="3" ${scheduler.graphsPerRow === 3 ? 'selected' : ''}>3</option>
-                    </select>
-                </div>
-            </div>
-
             <div class="graphs-container" style="--graphs-per-row: ${scheduler.graphsPerRow || 1}">
                 ${graphsHTML}
             </div>

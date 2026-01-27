@@ -194,9 +194,16 @@ class UniversalSchedulerPanel extends HTMLElement {
             this.openCreateModal();
         });
 
+        // Global settings toggle
+        this._root.querySelector('#globalSettingsToggle').addEventListener('click', () => {
+            const globalSettings = this._root.querySelector('.global-settings');
+            globalSettings.classList.toggle('collapsed');
+            this._saveGlobalSettings();
+        });
+
         // Global snap select
         this._root.querySelector('#globalSnapSelect').addEventListener('change', (e) => {
-            this.globalSnapMinutes = parseInt(e.target.value);
+            this.globalSnapMinutes = parseFloat(e.target.value);
             this._saveGlobalSettings();
         });
 
@@ -270,12 +277,34 @@ class UniversalSchedulerPanel extends HTMLElement {
 
         // Settings modal events
         this._root.querySelector('#settingsCloseBtn').addEventListener('click', () => {
-            this._root.querySelector('#settingsModal').classList.remove('show');
+            this.closeSettingsModal();
         });
 
         this._root.querySelector('#settingsModal').addEventListener('click', (e) => {
             if (e.target.classList.contains('modal-overlay')) {
-                this._root.querySelector('#settingsModal').classList.remove('show');
+                this.closeSettingsModal();
+            }
+        });
+
+        // Settings modal - Update Interval change
+        this._root.querySelector('#settingsUpdateInterval').addEventListener('change', (e) => {
+            if (this._settingsModalEntityId) {
+                this.saveUndoState(this._settingsModalEntityId);
+                this.schedulers[this._settingsModalEntityId].updateInterval = parseInt(e.target.value);
+            }
+        });
+
+        // Settings modal - Graphs per Row change
+        this._root.querySelector('#settingsGraphsPerRow').addEventListener('change', (e) => {
+            if (this._settingsModalEntityId) {
+                this.saveUndoState(this._settingsModalEntityId);
+                const value = parseInt(e.target.value);
+                this.schedulers[this._settingsModalEntityId].graphsPerRow = value;
+                // Update the card's graphs container
+                const card = this._root.querySelector(`[data-entity="${this._settingsModalEntityId}"]`);
+                if (card) {
+                    card.querySelector('.graphs-container')?.style.setProperty('--graphs-per-row', value);
+                }
             }
         });
 
@@ -353,6 +382,33 @@ class UniversalSchedulerPanel extends HTMLElement {
 
     closeCreateModal() {
         this._root.querySelector('#createModal').classList.remove('show');
+    }
+
+    openSettingsModal(entityId) {
+        const scheduler = this.schedulers[entityId];
+        if (!scheduler) return;
+
+        this._settingsModalEntityId = entityId;
+
+        // Populate modal with current values
+        const updateIntervalSelect = this._root.querySelector('#settingsUpdateInterval');
+        const graphsPerRowSelect = this._root.querySelector('#settingsGraphsPerRow');
+
+        updateIntervalSelect.value = (scheduler.updateInterval || 300).toString();
+        graphsPerRowSelect.value = (scheduler.graphsPerRow || 1).toString();
+
+        // Update modal title to show which scheduler
+        const modalTitle = this._root.querySelector('#settingsModal h3');
+        if (modalTitle) {
+            modalTitle.textContent = `Settings: ${scheduler.name}`;
+        }
+
+        this._root.querySelector('#settingsModal').classList.add('show');
+    }
+
+    closeSettingsModal() {
+        this._root.querySelector('#settingsModal').classList.remove('show');
+        this._settingsModalEntityId = null;
     }
 
     confirmCreateScheduler() {
@@ -739,7 +795,7 @@ class UniversalSchedulerPanel extends HTMLElement {
         // Settings button - opens settings modal
         card.querySelector('[data-action="settings"]').addEventListener('click', (e) => {
             e.stopPropagation();
-            this._root.querySelector('#settingsModal').classList.add('show');
+            this.openSettingsModal(entityId);
         });
 
         // Delete button
@@ -748,19 +804,6 @@ class UniversalSchedulerPanel extends HTMLElement {
             if (confirm(`Delete scheduler for ${entityId}?`)) {
                 this.deleteScheduler(entityId);
             }
-        });
-
-        // Top-level scheduler settings
-        card.querySelector('[data-setting="updateInterval"]').addEventListener('change', (e) => {
-            this.saveUndoState(entityId);
-            this.schedulers[entityId].updateInterval = parseInt(e.target.value);
-        });
-
-        card.querySelector('[data-setting="graphsPerRow"]').addEventListener('change', (e) => {
-            this.saveUndoState(entityId);
-            const value = parseInt(e.target.value);
-            this.schedulers[entityId].graphsPerRow = value;
-            card.querySelector('.graphs-container').style.setProperty('--graphs-per-row', value);
         });
 
         // Add Graph button
@@ -789,6 +832,14 @@ class UniversalSchedulerPanel extends HTMLElement {
         section.querySelector('[data-action="toggleGraph"]').addEventListener('click', (e) => {
             if (e.target.closest('.weekday-selector') || e.target.closest('[data-action="editGraphLabel"]')) return;
             this.toggleGraphSection(entityId, graphIndex, section);
+        });
+
+        // Toggle graph settings collapse
+        section.querySelector('[data-action="toggleGraphSettings"]')?.addEventListener('click', (e) => {
+            const wrapper = section.querySelector('.graph-settings-wrapper');
+            if (wrapper) {
+                wrapper.classList.toggle('collapsed');
+            }
         });
 
         // Graph label edit
@@ -972,7 +1023,66 @@ class UniversalSchedulerPanel extends HTMLElement {
             }
         });
 
-        // X-axis entity input handler
+        // X-axis entity autocomplete setup
+        const xEntityInput = section.querySelector('[data-graph-setting="xAxisEntity"]');
+        const xEntityAutocomplete = section.querySelector('.x-entity-autocomplete-list');
+
+        if (xEntityInput && xEntityAutocomplete) {
+            xEntityInput.addEventListener('input', (e) => {
+                const value = e.target.value.toLowerCase();
+                // Get all sensor/input_number entities for X-axis
+                const allEntities = Object.keys(this._hass?.states || {})
+                    .filter(id => {
+                        const domain = id.split('.')[0];
+                        return ['sensor', 'input_number', 'number', 'counter'].includes(domain);
+                    })
+                    .sort();
+
+                const matches = allEntities.filter(id =>
+                    id.toLowerCase().includes(value) ||
+                    (this._hass?.states[id]?.attributes?.friendly_name || '').toLowerCase().includes(value)
+                ).slice(0, 10);
+
+                if (value && matches.length > 0) {
+                    xEntityAutocomplete.innerHTML = matches.map(id => {
+                        const state = this._hass?.states[id];
+                        const name = state?.attributes?.friendly_name || id;
+                        const domain = id.split('.')[0];
+                        return `
+                            <div class="autocomplete-item" data-entity="${id}">
+                                <ha-icon icon="${getDomainIcon(domain)}"></ha-icon>
+                                <span>${name}</span>
+                                <span class="domain-badge">${domain}</span>
+                            </div>
+                        `;
+                    }).join('');
+                    xEntityAutocomplete.classList.add('show');
+                } else {
+                    xEntityAutocomplete.classList.remove('show');
+                }
+            });
+
+            xEntityAutocomplete.addEventListener('click', (e) => {
+                const item = e.target.closest('.autocomplete-item');
+                if (item) {
+                    const selectedEntityId = item.dataset.entity;
+                    xEntityInput.value = selectedEntityId;
+                    xEntityAutocomplete.classList.remove('show');
+                    // Trigger the change event to apply the entity
+                    xEntityInput.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+            });
+
+            // Close autocomplete when clicking outside
+            xEntityInput.addEventListener('blur', () => {
+                // Delay to allow click on autocomplete item
+                setTimeout(() => {
+                    xEntityAutocomplete.classList.remove('show');
+                }, 200);
+            });
+        }
+
+        // X-axis entity input handler (change event)
         section.querySelector('[data-graph-setting="xAxisEntity"]')?.addEventListener('change', (e) => {
             this.saveUndoState(entityId);
             const graph = getGraph();
@@ -1776,12 +1886,14 @@ class UniversalSchedulerPanel extends HTMLElement {
 
     _saveGlobalSettings() {
         try {
+            const globalSettings = this._root.querySelector('.global-settings');
             const settings = {
                 globalSnapMinutes: this.globalSnapMinutes,
                 graphDisplayMode: this.graphDisplayMode,
                 itemsPerPage: this.itemsPerPage,
                 columnsCount: this.columnsCount,
-                graphHeight: this.graphHeight
+                graphHeight: this.graphHeight,
+                globalSettingsCollapsed: globalSettings?.classList.contains('collapsed') ?? true
             };
             localStorage.setItem('universal_scheduler_global_settings', JSON.stringify(settings));
         } catch (e) {
@@ -1810,11 +1922,17 @@ class UniversalSchedulerPanel extends HTMLElement {
                 if (settings.graphHeight !== undefined) {
                     this.graphHeight = settings.graphHeight;
                 }
+                // Restore collapsed state (default to collapsed)
+                this._globalSettingsCollapsed = settings.globalSettingsCollapsed ?? true;
 
                 console.log('Restored global settings');
+            } else {
+                // Default to collapsed if no settings stored
+                this._globalSettingsCollapsed = true;
             }
         } catch (e) {
             console.warn('Failed to restore global settings:', e);
+            this._globalSettingsCollapsed = true;
         }
     }
 
@@ -1839,6 +1957,16 @@ class UniversalSchedulerPanel extends HTMLElement {
         if (columnsCount) {
             columnsCount.value = this.columnsCount.toString();
             this._root.querySelector('#schedulersContainer')?.style.setProperty('--columns-count', this.columnsCount);
+        }
+
+        // Apply global settings collapsed state
+        const globalSettings = this._root.querySelector('.global-settings');
+        if (globalSettings) {
+            if (this._globalSettingsCollapsed) {
+                globalSettings.classList.add('collapsed');
+            } else {
+                globalSettings.classList.remove('collapsed');
+            }
         }
 
         const graphHeight = this._root.querySelector('#graphHeight');

@@ -14,6 +14,7 @@ from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.event import (
     async_track_time_interval,
     async_track_state_change_event,
+    async_track_point_in_time,
 )
 from homeassistant.util import dt as dt_util
 from homeassistant.config_entries import ConfigEntry
@@ -248,9 +249,10 @@ class UniversalSchedulerSwitch(SwitchEntity, RestoreEntity):
         if self._remove_listener:
             self._remove_listener()
 
-        self._remove_listener = async_track_time_interval(
-            self.hass, self._update_entity, timedelta(seconds=self._update_interval)
-        )
+        # Use clock-aligned scheduling for precise timing
+        # This ensures updates happen at exact intervals (e.g., 19:00:00, 19:00:30)
+        # rather than offset from when the scheduler started
+        self._schedule_next_aligned_update()
 
         # Set up X-axis entity listeners for entity-based graphs
         await self._setup_x_axis_listeners()
@@ -259,10 +261,51 @@ class UniversalSchedulerSwitch(SwitchEntity, RestoreEntity):
         await self._update_entity()
 
         _LOGGER.debug(
-            "Listener started for %s; interval=%ss",
+            "Listener started for %s; interval=%ss (clock-aligned)",
             self._target_entity,
             self._update_interval,
         )
+
+    def _schedule_next_aligned_update(self) -> None:
+        """Schedule the next update aligned to clock boundaries."""
+        now = dt_util.now()
+        interval_seconds = self._update_interval
+
+        # Calculate seconds since midnight
+        midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        seconds_since_midnight = (now - midnight).total_seconds()
+
+        # Find the next aligned time slot
+        # e.g., if interval is 30s and current time is 19:00:17, next slot is 19:00:30
+        current_slot = int(seconds_since_midnight / interval_seconds)
+        next_slot_seconds = (current_slot + 1) * interval_seconds
+
+        # Handle day rollover
+        if next_slot_seconds >= 86400:
+            next_slot_seconds = 0
+            midnight = midnight + timedelta(days=1)
+
+        next_update_time = midnight + timedelta(seconds=next_slot_seconds)
+
+        _LOGGER.debug(
+            "Scheduling next update for %s at %s (interval=%ss)",
+            self._target_entity,
+            next_update_time.isoformat(),
+            interval_seconds,
+        )
+
+        self._remove_listener = async_track_point_in_time(
+            self.hass, self._aligned_update_callback, next_update_time
+        )
+
+    @callback
+    def _aligned_update_callback(self, now: datetime) -> None:
+        """Handle aligned update callback and schedule the next one."""
+        # Schedule the next update first
+        self._schedule_next_aligned_update()
+
+        # Then perform the update
+        self.hass.async_create_task(self._update_entity(now))
 
     async def _setup_x_axis_listeners(self) -> None:
         """Set up state change listeners for entity-based X-axis graphs."""
@@ -386,11 +429,14 @@ class UniversalSchedulerSwitch(SwitchEntity, RestoreEntity):
             # 1. Calculate current time in minutes and get weekday
             current_time = dt_util.now()
             # Use sub-minute resolution so short intervals apply on time
+            # Add a tiny epsilon (1ms = 1/60000 minutes) to ensure we're "at or past"
+            # exact schedule points, so step changes happen immediately at the scheduled time
             current_minute = (
                 current_time.hour * 60
                 + current_time.minute
                 + current_time.second / 60
                 + current_time.microsecond / 60000000
+                + 0.0000167  # ~1ms epsilon
             )
             # Python weekday: 0=Monday, 6=Sunday. Convert to JS: 0=Sunday, 1=Monday, etc.
             python_weekday = current_time.weekday()  # 0=Mon, 6=Sun
@@ -751,18 +797,28 @@ class UniversalSchedulerSwitch(SwitchEntity, RestoreEntity):
         y1 = (p1["y"] - min_y) / (max_y - min_y) if max_y != min_y else 0.0
         y2 = (p2["y"] - min_y) / (max_y - min_y) if max_y != min_y else 0.0
 
-        # Step-to-min: hold the curve at the minimum when the next point drops to (or below) min
-        # and avoid easing up from the minimum until we've progressed slightly into the segment.
+        if mode == MODE_STEP:
+            # Step function - stay at p1's value until we reach p2
+            # When we're at or past p2's x position, use p2's value (immediate step)
+            if current_minute >= p2["x"]:
+                return y2
+            # For step_to_min: only step to min AT the min point, not before
+            # This keeps p1's value until we reach p2
+            return y1
+
+        # For non-step modes with step_to_min enabled:
+        # Hold at p1's value until reaching p2, then drop to min
         if step_to_min and max_y != min_y:
+            # If next point is at min, hold at p1's value until we reach p2
             if p2["y"] <= min_y:
-                return 0.0
+                if current_minute >= p2["x"]:
+                    return 0.0  # At p2, drop to min
+                return y1  # Before p2, hold at p1's value
+            # If coming up from min, delay the rise slightly
             if p1["y"] <= min_y and ratio < 0.01:
                 return 0.0
 
-        if mode == MODE_STEP:
-            # Step function - stay at p1's value until we reach p2
-            return 0.0 if step_to_min and p2["y"] <= min_y else y1
-        elif mode == MODE_SMOOTH:
+        if mode == MODE_SMOOTH:
             # Cosine interpolation for smooth curves
             return y1 + (y2 - y1) * (1 - math.cos(ratio * math.pi)) / 2
         else:
