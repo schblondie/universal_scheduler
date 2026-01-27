@@ -742,11 +742,15 @@ class UniversalSchedulerCardEditor extends HTMLElement {
         this._schedulers = [];
         this._filteredSchedulers = [];
         this._showAutocomplete = false;
+        this._initialLoadDone = false;
     }
 
     set hass(hass) {
         this._hass = hass;
-        this._loadSchedulers();
+        // Only load schedulers on initial load, not on every hass update
+        if (!this._initialLoadDone) {
+            this._loadSchedulers();
+        }
     }
 
     setConfig(config) {
@@ -801,6 +805,7 @@ class UniversalSchedulerCardEditor extends HTMLElement {
         });
 
         this._filteredSchedulers = [...this._schedulers];
+        this._initialLoadDone = true;
         this._render();
     }
 
