@@ -152,7 +152,9 @@ export function saveScheduler(hass, entityId, scheduler) {
         update_interval: scheduler.updateInterval || 300,
         enabled: scheduler.enabled,
         graphs_per_row: scheduler.graphsPerRow || 1,
-        graphs: graphs
+        graphs: graphs,
+        override_behavior: scheduler.overrideBehavior || 'none',
+        override_duration: scheduler.overrideDuration || 3600
     }).then(() => {
         console.log('Scheduler saved:', entityId);
     });
@@ -263,6 +265,8 @@ export function loadSchedulersFromHA(hass, getEntityInfo) {
                 updateInterval: config.update_interval ?? 300,
                 graphsPerRow: config.graphs_per_row || 1,
                 graphs: graphs,
+                overrideBehavior: config.override_behavior || 'none',
+                overrideDuration: config.override_duration || 3600,
             };
         });
 

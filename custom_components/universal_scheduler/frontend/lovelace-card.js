@@ -956,6 +956,11 @@ class UniversalSchedulerCardEditor extends HTMLElement {
                 <label for="allow_schedule_editing">Allow editing of schedules</label>
             </div>
 
+            <div class="editor-checkbox" style="margin-left: 48px; ${this._config.allow_edit === false || !this._config.show_graph_settings ? 'opacity: 0.5; pointer-events: none;' : ''}">
+                <input type="checkbox" id="allow_advanced_settings" ${this._config.allow_advanced_settings && this._config.allow_edit !== false && this._config.show_graph_settings ? 'checked' : ''} ${this._config.allow_edit === false || !this._config.show_graph_settings ? 'disabled' : ''}>
+                <label for="allow_advanced_settings">Allow advanced settings (update interval, override behavior)</label>
+            </div>
+
             <div class="editor-checkbox" style="margin-left: 24px; ${this._config.allow_edit === false ? 'opacity: 0.5; pointer-events: none;' : ''}">
                 <input type="checkbox" id="show_points_editor" ${this._config.show_points_editor && this._config.allow_edit !== false ? 'checked' : ''} ${this._config.allow_edit === false ? 'disabled' : ''}>
                 <label for="show_points_editor">Show points editor</label>
@@ -1067,18 +1072,21 @@ class UniversalSchedulerCardEditor extends HTMLElement {
                 this._valueChanged('show_graph_settings', false);
                 this._valueChanged('show_points_editor', false);
                 this._valueChanged('allow_schedule_editing', false);
+                this._valueChanged('allow_advanced_settings', false);
             }
             this._render();
         });
         this.querySelector('#show_graph_settings').addEventListener('change', (e) => {
             this._valueChanged('show_graph_settings', e.target.checked);
-            // If disabling graph settings, also disable allow_schedule_editing
+            // If disabling graph settings, also disable allow_schedule_editing and allow_advanced_settings
             if (!e.target.checked) {
                 this._valueChanged('allow_schedule_editing', false);
+                this._valueChanged('allow_advanced_settings', false);
             }
             this._render();
         });
         this.querySelector('#allow_schedule_editing').addEventListener('change', (e) => this._valueChanged('allow_schedule_editing', e.target.checked));
+        this.querySelector('#allow_advanced_settings').addEventListener('change', (e) => this._valueChanged('allow_advanced_settings', e.target.checked));
         this.querySelector('#show_points_editor').addEventListener('change', (e) => this._valueChanged('show_points_editor', e.target.checked));
         this.querySelector('#show_weekdays').addEventListener('change', (e) => this._valueChanged('show_weekdays', e.target.checked));
         this.querySelector('#show_current_value').addEventListener('change', (e) => this._valueChanged('show_current_value', e.target.checked));
@@ -1307,6 +1315,8 @@ class UniversalSchedulerCard extends HTMLElement {
             enabled: data.enabled !== false,
             updateInterval: data.update_interval ?? 300,
             graphsPerRow: data.graphs_per_row || 1,
+            overrideBehavior: data.override_behavior || 'none',
+            overrideDuration: data.override_duration || 3600,
             graphs: graphs,
             availableAttributes: availableAttributes
         };
@@ -1565,6 +1575,36 @@ class UniversalSchedulerCard extends HTMLElement {
                             </div>
                         </div>
                     ` : ''}
+                    ${this._config.allow_advanced_settings ? `
+                        <div class="card-graph-settings" style="margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--divider-color, rgba(0,0,0,0.12));">
+                            <div class="input-group">
+                                <label>Update interval</label>
+                                <select data-setting="updateInterval">
+                                    <option value="1" ${(this._scheduler?.updateInterval || 60) === 1 ? 'selected' : ''}>1 sec</option>
+                                    <option value="5" ${(this._scheduler?.updateInterval || 60) === 5 ? 'selected' : ''}>5 sec</option>
+                                    <option value="10" ${(this._scheduler?.updateInterval || 60) === 10 ? 'selected' : ''}>10 sec</option>
+                                    <option value="30" ${(this._scheduler?.updateInterval || 60) === 30 ? 'selected' : ''}>30 sec</option>
+                                    <option value="60" ${(this._scheduler?.updateInterval || 60) === 60 ? 'selected' : ''}>1 min</option>
+                                    <option value="300" ${(this._scheduler?.updateInterval || 60) === 300 ? 'selected' : ''}>5 min</option>
+                                    <option value="600" ${(this._scheduler?.updateInterval || 60) === 600 ? 'selected' : ''}>10 min</option>
+                                </select>
+                            </div>
+                            <div class="input-group">
+                                <label>Override behavior</label>
+                                <select data-setting="overrideBehavior">
+                                    <option value="none" ${(this._scheduler?.overrideBehavior || 'none') === 'none' ? 'selected' : ''}>Ignore</option>
+                                    <option value="until_next" ${(this._scheduler?.overrideBehavior || 'none') === 'until_next' ? 'selected' : ''}>Until next change</option>
+                                    <option value="until_day_end" ${(this._scheduler?.overrideBehavior || 'none') === 'until_day_end' ? 'selected' : ''}>Until end of day</option>
+                                    <option value="for_duration" ${(this._scheduler?.overrideBehavior || 'none') === 'for_duration' ? 'selected' : ''}>For duration</option>
+                                    <option value="until_reenabled" ${(this._scheduler?.overrideBehavior || 'none') === 'until_reenabled' ? 'selected' : ''}>Until re-enabled</option>
+                                </select>
+                            </div>
+                            <div class="input-group override-duration-group" style="display: ${(this._scheduler?.overrideBehavior || 'none') === 'for_duration' ? 'flex' : 'none'};">
+                                <label>Duration</label>
+                                <input type="text" data-setting="overrideDuration" value="${this._formatSecondsToDuration(this._scheduler?.overrideDuration || 3600)}" placeholder="DD:HH:MM:SS" style="width: 100px;">
+                            </div>
+                        </div>
+                    ` : ''}
                     <div class="card-graph-settings">
                         <div class="input-group">
                             <label>Mode</label>
@@ -1768,6 +1808,31 @@ class UniversalSchedulerCard extends HTMLElement {
         const mins = parseInt(match[2], 10);
         if (hours < 0 || hours > 23 || mins < 0 || mins > 59) return null;
         return hours * 60 + mins;
+    }
+
+    _parseDurationToSeconds(durationStr) {
+        // Parse duration string in DD:HH:MM:SS format to total seconds.
+        // Also accepts partial formats like HH:MM:SS, MM:SS, or just SS.
+        if (!durationStr || typeof durationStr !== 'string') return 3600; // Default 1 hour
+
+        const parts = durationStr.split(':').map(p => parseInt(p.trim()) || 0);
+
+        // Pad to 4 parts (DD:HH:MM:SS)
+        while (parts.length < 4) {
+            parts.unshift(0);
+        }
+
+        const [days, hours, minutes, seconds] = parts;
+        return (days * 86400) + (hours * 3600) + (minutes * 60) + seconds;
+    }
+
+    _formatSecondsToDuration(totalSeconds) {
+        if (!totalSeconds || totalSeconds <= 0) return '00:01:00:00'; // Default 1 hour
+        const days = Math.floor(totalSeconds / 86400);
+        const hours = Math.floor((totalSeconds % 86400) / 3600);
+        const mins = Math.floor((totalSeconds % 3600) / 60);
+        const secs = totalSeconds % 60;
+        return `${days.toString().padStart(2, '0')}:${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     }
 
     _setupEventListeners() {
@@ -2070,6 +2135,35 @@ class UniversalSchedulerCard extends HTMLElement {
     }
 
     async _updateGraphSetting(setting, value) {
+        // Handle scheduler-level settings (not graph-level)
+        const schedulerSettings = ['updateInterval', 'overrideBehavior', 'overrideDuration'];
+        if (schedulerSettings.includes(setting)) {
+            if (!this._scheduler) return;
+
+            // Handle override duration conversion
+            if (setting === 'overrideDuration') {
+                value = this._parseDurationToSeconds(value);
+            } else if (setting === 'updateInterval') {
+                value = parseInt(value, 10);
+            }
+
+            // Update scheduler property
+            this._scheduler[setting] = value;
+
+            // Show/hide duration input based on behavior
+            if (setting === 'overrideBehavior') {
+                const container = this.shadowRoot.querySelector('.scheduler-card-container');
+                const durationGroup = container?.querySelector('.override-duration-group');
+                if (durationGroup) {
+                    durationGroup.style.display = value === 'for_duration' ? 'flex' : 'none';
+                }
+            }
+
+            // Save immediately for scheduler settings
+            await this._saveSchedulerConfig();
+            return;
+        }
+
         const graphIndex = this._getGraphIndex();
 
         // Map frontend setting names to internal names
@@ -2377,6 +2471,8 @@ class UniversalSchedulerCard extends HTMLElement {
             update_interval: this._scheduler.updateInterval || 300,
             enabled: this._scheduler.enabled,
             graphs_per_row: this._scheduler.graphsPerRow || 1,
+            override_behavior: this._scheduler.overrideBehavior || 'none',
+            override_duration: this._scheduler.overrideDuration || 3600,
             graphs: graphs
         });
     };

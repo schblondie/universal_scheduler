@@ -2028,6 +2028,23 @@ const PANEL_TEMPLATE = `
                     </select>
                     <span class="form-hint">Number of graphs displayed side by side</span>
                 </div>
+                <h4 style="margin-top: 16px; margin-bottom: 8px; font-size: 0.95em; color: var(--secondary-text-color);">Manual Override Behavior</h4>
+                <div class="form-group">
+                    <label>When entity is changed manually</label>
+                    <select id="settingsOverrideBehavior">
+                        <option value="none">Ignore (keep scheduling)</option>
+                        <option value="until_next">Disable until next scheduled change</option>
+                        <option value="until_day_end">Disable until end of day</option>
+                        <option value="for_duration">Disable for specific duration</option>
+                        <option value="until_reenabled">Disable until manually re-enabled</option>
+                    </select>
+                    <span class="form-hint">How the scheduler responds when the entity is changed by user or other integrations</span>
+                </div>
+                <div class="form-group" id="overrideDurationGroup" style="display: none;">
+                    <label>Override Duration</label>
+                    <input type="text" id="settingsOverrideDuration" placeholder="00:01:00:00" value="00:01:00:00">
+                    <span class="form-hint">Format: DD:HH:MM:SS (e.g., 00:01:00:00 = 1 hour)</span>
+                </div>
             </div>
             <div class="modal-buttons">
                 <button class="secondary" id="settingsCloseBtn">Close</button>
@@ -5109,7 +5126,9 @@ function saveScheduler(hass, entityId, scheduler) {
         update_interval: scheduler.updateInterval || 300,
         enabled: scheduler.enabled,
         graphs_per_row: scheduler.graphsPerRow || 1,
-        graphs: graphs
+        graphs: graphs,
+        override_behavior: scheduler.overrideBehavior || 'none',
+        override_duration: scheduler.overrideDuration || 3600
     }).then(() => {
         console.log('Scheduler saved:', entityId);
     });
@@ -5220,6 +5239,8 @@ function loadSchedulersFromHA(hass, getEntityInfo) {
                 updateInterval: config.update_interval ?? 300,
                 graphsPerRow: config.graphs_per_row || 1,
                 graphs: graphs,
+                overrideBehavior: config.override_behavior || 'none',
+                overrideDuration: config.override_duration || 3600,
             };
         });
 
@@ -5570,6 +5591,28 @@ class UniversalSchedulerPanel extends HTMLElement {
             }
         });
 
+        // Settings modal - Override Behavior change
+        this._root.querySelector('#settingsOverrideBehavior').addEventListener('change', (e) => {
+            if (this._settingsModalEntityId) {
+                this.saveUndoState(this._settingsModalEntityId);
+                this.schedulers[this._settingsModalEntityId].overrideBehavior = e.target.value;
+                // Show/hide duration input
+                const durationGroup = this._root.querySelector('#overrideDurationGroup');
+                durationGroup.style.display = e.target.value === 'for_duration' ? 'block' : 'none';
+            }
+        });
+
+        // Settings modal - Override Duration change
+        this._root.querySelector('#settingsOverrideDuration').addEventListener('change', (e) => {
+            if (this._settingsModalEntityId) {
+                this.saveUndoState(this._settingsModalEntityId);
+                const seconds = this._parseDurationToSeconds(e.target.value);
+                this.schedulers[this._settingsModalEntityId].overrideDuration = seconds;
+                // Format back to readable format
+                e.target.value = this._formatSecondsToDuration(seconds);
+            }
+        });
+
         // Entity input autocomplete
         const entityInput = this._root.querySelector('#modalEntityInput');
         const autocompleteList = this._root.querySelector('#modalAutocomplete');
@@ -5655,9 +5698,17 @@ class UniversalSchedulerPanel extends HTMLElement {
         // Populate modal with current values
         const updateIntervalSelect = this._root.querySelector('#settingsUpdateInterval');
         const graphsPerRowSelect = this._root.querySelector('#settingsGraphsPerRow');
+        const overrideBehaviorSelect = this._root.querySelector('#settingsOverrideBehavior');
+        const overrideDurationInput = this._root.querySelector('#settingsOverrideDuration');
+        const overrideDurationGroup = this._root.querySelector('#overrideDurationGroup');
 
         updateIntervalSelect.value = (scheduler.updateInterval || 300).toString();
         graphsPerRowSelect.value = (scheduler.graphsPerRow || 1).toString();
+        overrideBehaviorSelect.value = scheduler.overrideBehavior || 'none';
+        overrideDurationInput.value = this._formatSecondsToDuration(scheduler.overrideDuration || 3600);
+
+        // Show/hide duration input based on behavior
+        overrideDurationGroup.style.display = overrideBehaviorSelect.value === 'for_duration' ? 'block' : 'none';
 
         // Update modal title to show which scheduler
         const modalTitle = this._root.querySelector('#settingsModal h3');
@@ -5671,6 +5722,43 @@ class UniversalSchedulerPanel extends HTMLElement {
     closeSettingsModal() {
         this._root.querySelector('#settingsModal').classList.remove('show');
         this._settingsModalEntityId = null;
+    }
+
+    _parseDurationToSeconds(durationStr) {
+        /**
+         * Parse duration string in DD:HH:MM:SS format to total seconds.
+         * Also accepts partial formats like HH:MM:SS, MM:SS, or just SS.
+         */
+        if (!durationStr || typeof durationStr !== 'string') return 3600; // Default 1 hour
+
+        const parts = durationStr.split(':').map(p => parseInt(p.trim()) || 0);
+
+        // Pad to 4 parts (DD:HH:MM:SS)
+        while (parts.length < 4) {
+            parts.unshift(0);
+        }
+
+        const [days, hours, minutes, seconds] = parts;
+        return (days * 86400) + (hours * 3600) + (minutes * 60) + seconds;
+    }
+
+    _formatSecondsToDuration(totalSeconds) {
+        /**
+         * Format total seconds to DD:HH:MM:SS string.
+         */
+        if (!totalSeconds || totalSeconds < 0) totalSeconds = 0;
+
+        const days = Math.floor(totalSeconds / 86400);
+        const hours = Math.floor((totalSeconds % 86400) / 3600);
+        const minutes = Math.floor((totalSeconds % 3600) / 60);
+        const seconds = totalSeconds % 60;
+
+        return [
+            days.toString().padStart(2, '0'),
+            hours.toString().padStart(2, '0'),
+            minutes.toString().padStart(2, '0'),
+            seconds.toString().padStart(2, '0')
+        ].join(':');
     }
 
     confirmCreateScheduler() {

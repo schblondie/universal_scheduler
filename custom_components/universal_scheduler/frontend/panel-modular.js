@@ -308,6 +308,28 @@ class UniversalSchedulerPanel extends HTMLElement {
             }
         });
 
+        // Settings modal - Override Behavior change
+        this._root.querySelector('#settingsOverrideBehavior').addEventListener('change', (e) => {
+            if (this._settingsModalEntityId) {
+                this.saveUndoState(this._settingsModalEntityId);
+                this.schedulers[this._settingsModalEntityId].overrideBehavior = e.target.value;
+                // Show/hide duration input
+                const durationGroup = this._root.querySelector('#overrideDurationGroup');
+                durationGroup.style.display = e.target.value === 'for_duration' ? 'block' : 'none';
+            }
+        });
+
+        // Settings modal - Override Duration change
+        this._root.querySelector('#settingsOverrideDuration').addEventListener('change', (e) => {
+            if (this._settingsModalEntityId) {
+                this.saveUndoState(this._settingsModalEntityId);
+                const seconds = this._parseDurationToSeconds(e.target.value);
+                this.schedulers[this._settingsModalEntityId].overrideDuration = seconds;
+                // Format back to readable format
+                e.target.value = this._formatSecondsToDuration(seconds);
+            }
+        });
+
         // Entity input autocomplete
         const entityInput = this._root.querySelector('#modalEntityInput');
         const autocompleteList = this._root.querySelector('#modalAutocomplete');
@@ -393,9 +415,17 @@ class UniversalSchedulerPanel extends HTMLElement {
         // Populate modal with current values
         const updateIntervalSelect = this._root.querySelector('#settingsUpdateInterval');
         const graphsPerRowSelect = this._root.querySelector('#settingsGraphsPerRow');
+        const overrideBehaviorSelect = this._root.querySelector('#settingsOverrideBehavior');
+        const overrideDurationInput = this._root.querySelector('#settingsOverrideDuration');
+        const overrideDurationGroup = this._root.querySelector('#overrideDurationGroup');
 
         updateIntervalSelect.value = (scheduler.updateInterval || 300).toString();
         graphsPerRowSelect.value = (scheduler.graphsPerRow || 1).toString();
+        overrideBehaviorSelect.value = scheduler.overrideBehavior || 'none';
+        overrideDurationInput.value = this._formatSecondsToDuration(scheduler.overrideDuration || 3600);
+
+        // Show/hide duration input based on behavior
+        overrideDurationGroup.style.display = overrideBehaviorSelect.value === 'for_duration' ? 'block' : 'none';
 
         // Update modal title to show which scheduler
         const modalTitle = this._root.querySelector('#settingsModal h3');
@@ -409,6 +439,43 @@ class UniversalSchedulerPanel extends HTMLElement {
     closeSettingsModal() {
         this._root.querySelector('#settingsModal').classList.remove('show');
         this._settingsModalEntityId = null;
+    }
+
+    _parseDurationToSeconds(durationStr) {
+        /**
+         * Parse duration string in DD:HH:MM:SS format to total seconds.
+         * Also accepts partial formats like HH:MM:SS, MM:SS, or just SS.
+         */
+        if (!durationStr || typeof durationStr !== 'string') return 3600; // Default 1 hour
+
+        const parts = durationStr.split(':').map(p => parseInt(p.trim()) || 0);
+
+        // Pad to 4 parts (DD:HH:MM:SS)
+        while (parts.length < 4) {
+            parts.unshift(0);
+        }
+
+        const [days, hours, minutes, seconds] = parts;
+        return (days * 86400) + (hours * 3600) + (minutes * 60) + seconds;
+    }
+
+    _formatSecondsToDuration(totalSeconds) {
+        /**
+         * Format total seconds to DD:HH:MM:SS string.
+         */
+        if (!totalSeconds || totalSeconds < 0) totalSeconds = 0;
+
+        const days = Math.floor(totalSeconds / 86400);
+        const hours = Math.floor((totalSeconds % 86400) / 3600);
+        const minutes = Math.floor((totalSeconds % 3600) / 60);
+        const seconds = totalSeconds % 60;
+
+        return [
+            days.toString().padStart(2, '0'),
+            hours.toString().padStart(2, '0'),
+            minutes.toString().padStart(2, '0'),
+            seconds.toString().padStart(2, '0')
+        ].join(':');
     }
 
     confirmCreateScheduler() {

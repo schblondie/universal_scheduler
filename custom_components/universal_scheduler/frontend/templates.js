@@ -176,6 +176,23 @@ export const PANEL_TEMPLATE = `
                     </select>
                     <span class="form-hint">Number of graphs displayed side by side</span>
                 </div>
+                <h4 style="margin-top: 16px; margin-bottom: 8px; font-size: 0.95em; color: var(--secondary-text-color);">Manual Override Behavior</h4>
+                <div class="form-group">
+                    <label>When entity is changed manually</label>
+                    <select id="settingsOverrideBehavior">
+                        <option value="none">Ignore (keep scheduling)</option>
+                        <option value="until_next">Disable until next scheduled change</option>
+                        <option value="until_day_end">Disable until end of day</option>
+                        <option value="for_duration">Disable for specific duration</option>
+                        <option value="until_reenabled">Disable until manually re-enabled</option>
+                    </select>
+                    <span class="form-hint">How the scheduler responds when the entity is changed by user or other integrations</span>
+                </div>
+                <div class="form-group" id="overrideDurationGroup" style="display: none;">
+                    <label>Override Duration</label>
+                    <input type="text" id="settingsOverrideDuration" placeholder="00:01:00:00" value="00:01:00:00">
+                    <span class="form-hint">Format: DD:HH:MM:SS (e.g., 00:01:00:00 = 1 hour)</span>
+                </div>
             </div>
             <div class="modal-buttons">
                 <button class="secondary" id="settingsCloseBtn">Close</button>

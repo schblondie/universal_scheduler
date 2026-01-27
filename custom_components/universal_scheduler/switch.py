@@ -88,6 +88,8 @@ class UniversalSchedulerSwitch(SwitchEntity, RestoreEntity):
         self._is_on = bool(config.get("enabled", True))
         self._remove_listener = None
         self._remove_x_axis_listeners: list = []  # For entity-based X-axis state tracking
+        self._remove_target_listener = None  # For manual override detection
+        self._remove_override_timer = None  # For timed override recovery
 
         # Top-level config
         self._target_entity = config.get(ATTR_TARGET_ENTITY, entity_id)
@@ -95,6 +97,20 @@ class UniversalSchedulerSwitch(SwitchEntity, RestoreEntity):
         self._update_interval = int(
             config.get(ATTR_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL)
         )
+
+        # Override behavior settings
+        # 'none' = ignore manual changes
+        # 'until_next' = disable until next scheduled change
+        # 'until_day_end' = disable until midnight
+        # 'for_duration' = disable for specific duration (seconds)
+        # 'until_reenabled' = disable until manually re-enabled
+        self._override_behavior = config.get("override_behavior", "none")
+        self._override_duration = int(
+            config.get("override_duration", 3600)
+        )  # default 1 hour
+        self._is_overridden = False
+        self._override_until = None  # datetime when override expires
+        self._last_applied_value = None  # Track what we last applied
 
         # Multi-graph support - store entire graphs array
         self._graphs = config.get("graphs", [])
@@ -169,7 +185,7 @@ class UniversalSchedulerSwitch(SwitchEntity, RestoreEntity):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return extra state attributes."""
-        return {
+        attrs = {
             ATTR_TARGET_ENTITY: self._target_entity,
             "attribute": self._attribute,
             ATTR_DOMAIN: self._domain,
@@ -178,7 +194,13 @@ class UniversalSchedulerSwitch(SwitchEntity, RestoreEntity):
             ATTR_MAX_Y: self._max_y,
             ATTR_UPDATE_INTERVAL: self._update_interval,
             ATTR_POINTS: json.dumps(self._points),
+            "override_behavior": self._override_behavior,
+            "override_duration": self._override_duration,
+            "is_overridden": self._is_overridden,
         }
+        if self._override_until:
+            attrs["override_until"] = self._override_until.isoformat()
+        return attrs
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn on the scheduler."""
@@ -220,6 +242,21 @@ class UniversalSchedulerSwitch(SwitchEntity, RestoreEntity):
         # Restore the previous state
         if (state := await self.async_get_last_state()) is not None:
             self._is_on = state.state == "on"
+            # Restore override state
+            attrs = state.attributes
+            self._is_overridden = attrs.get("is_overridden", False)
+            if override_until := attrs.get("override_until"):
+                try:
+                    self._override_until = datetime.fromisoformat(override_until)
+                    # Check if override has expired
+                    if self._override_until <= dt_util.now():
+                        self._is_overridden = False
+                        self._override_until = None
+                except (ValueError, TypeError):
+                    self._override_until = None
+
+        # Set up target entity listener for manual change detection
+        await self._setup_target_listener()
 
         # If enabled (from restored state or config), start the interval immediately
         if self._is_on:
@@ -235,6 +272,16 @@ class UniversalSchedulerSwitch(SwitchEntity, RestoreEntity):
         for remove_listener in self._remove_x_axis_listeners:
             remove_listener()
         self._remove_x_axis_listeners.clear()
+
+        # Clean up target entity listener
+        if self._remove_target_listener:
+            self._remove_target_listener()
+            self._remove_target_listener = None
+
+        # Clean up override timer
+        if self._remove_override_timer:
+            self._remove_override_timer()
+            self._remove_override_timer = None
 
     async def _start_update_listener(self) -> None:
         """Start or restart the periodic update listener and run an immediate update."""
@@ -307,6 +354,135 @@ class UniversalSchedulerSwitch(SwitchEntity, RestoreEntity):
         # Then perform the update
         self.hass.async_create_task(self._update_entity(now))
 
+    async def _setup_target_listener(self) -> None:
+        """Set up state change listener for target entity to detect manual changes."""
+        if self._remove_target_listener:
+            self._remove_target_listener()
+            self._remove_target_listener = None
+
+        if self._override_behavior == "none":
+            return  # No override detection needed
+
+        @callback
+        def handle_target_state_change(event):
+            """Handle state change for target entity."""
+            new_state = event.data.get("new_state")
+            old_state = event.data.get("old_state")
+
+            if new_state is None or old_state is None:
+                return
+
+            # Ignore if scheduler is off or already overridden
+            if not self._is_on or self._is_overridden:
+                return
+
+            # Check if this change was made by something other than the scheduler
+            context = event.context
+            # If the change came from this scheduler (same context), ignore it
+            if self._last_applied_value is not None:
+                try:
+                    new_value = float(new_state.state)
+                    # Allow small tolerance for floating point comparison
+                    if abs(new_value - self._last_applied_value) < 0.01:
+                        return  # This was our own change
+                except (ValueError, TypeError):
+                    pass
+
+            _LOGGER.info(
+                "Manual change detected for %s (was %s, now %s). Override behavior: %s",
+                self._target_entity,
+                old_state.state,
+                new_state.state,
+                self._override_behavior,
+            )
+
+            # Trigger override based on behavior setting
+            self.hass.async_create_task(self._handle_manual_override())
+
+        self._remove_target_listener = async_track_state_change_event(
+            self.hass, [self._target_entity], handle_target_state_change
+        )
+
+    async def _handle_manual_override(self) -> None:
+        """Handle manual override based on configured behavior."""
+        self._is_overridden = True
+
+        if self._override_behavior == "until_next":
+            # Will be cleared on next scheduled update
+            self._override_until = None
+            _LOGGER.info(
+                "Scheduler %s overridden until next scheduled change",
+                self._target_entity,
+            )
+
+        elif self._override_behavior == "until_day_end":
+            # Override until midnight
+            now = dt_util.now()
+            midnight = (now + timedelta(days=1)).replace(
+                hour=0, minute=0, second=0, microsecond=0
+            )
+            self._override_until = midnight
+            self._schedule_override_recovery(midnight)
+            _LOGGER.info(
+                "Scheduler %s overridden until %s",
+                self._target_entity,
+                midnight.isoformat(),
+            )
+
+        elif self._override_behavior == "for_duration":
+            # Override for specified duration
+            self._override_until = dt_util.now() + timedelta(
+                seconds=self._override_duration
+            )
+            self._schedule_override_recovery(self._override_until)
+            _LOGGER.info(
+                "Scheduler %s overridden for %s seconds (until %s)",
+                self._target_entity,
+                self._override_duration,
+                self._override_until.isoformat(),
+            )
+
+        elif self._override_behavior == "until_reenabled":
+            # Stay overridden until manually re-enabled
+            self._override_until = None
+            _LOGGER.info(
+                "Scheduler %s overridden until manually re-enabled", self._target_entity
+            )
+
+        self.async_write_ha_state()
+
+    def _schedule_override_recovery(self, recovery_time: datetime) -> None:
+        """Schedule automatic recovery from override."""
+        if self._remove_override_timer:
+            self._remove_override_timer()
+
+        @callback
+        def recover_from_override(now: datetime) -> None:
+            """Clear override state."""
+            self._is_overridden = False
+            self._override_until = None
+            self._remove_override_timer = None
+            _LOGGER.info(
+                "Scheduler %s override expired, resuming normal operation",
+                self._target_entity,
+            )
+            self.async_write_ha_state()
+            # Trigger an immediate update
+            self.hass.async_create_task(self._update_entity())
+
+        self._remove_override_timer = async_track_point_in_time(
+            self.hass, recover_from_override, recovery_time
+        )
+
+    def clear_override(self) -> None:
+        """Manually clear override state (called when switch is toggled)."""
+        self._is_overridden = False
+        self._override_until = None
+        if self._remove_override_timer:
+            self._remove_override_timer()
+            self._remove_override_timer = None
+        _LOGGER.info("Scheduler %s override cleared manually", self._target_entity)
+
     async def _setup_x_axis_listeners(self) -> None:
         """Set up state change listeners for entity-based X-axis graphs."""
         # Clean up existing X-axis listeners
@@ -367,6 +543,8 @@ class UniversalSchedulerSwitch(SwitchEntity, RestoreEntity):
         update_interval: int | None = None,
         enabled: bool | None = None,
         graphs: list | None = None,
+        override_behavior: str | None = None,
+        override_duration: int | None = None,
     ) -> None:
         """Update the scheduler configuration."""
         self._target_entity = target_entity
@@ -376,6 +554,17 @@ class UniversalSchedulerSwitch(SwitchEntity, RestoreEntity):
         self._min_y = float(min_y)
         self._max_y = float(max_y)
         self._points = points
+
+        # Update override behavior settings
+        if override_behavior is not None:
+            old_behavior = self._override_behavior
+            self._override_behavior = override_behavior
+            # Re-setup target listener if behavior changed
+            if old_behavior != override_behavior:
+                await self._setup_target_listener()
+
+        if override_duration is not None:
+            self._override_duration = int(override_duration)
 
         # Update full graphs payload when provided (multi-graph support)
         if graphs is not None:
@@ -424,6 +613,27 @@ class UniversalSchedulerSwitch(SwitchEntity, RestoreEntity):
                 "Skip update: target=%s is_on=%s", self._target_entity, self._is_on
             )
             return
+
+        # Check override state
+        if self._is_overridden:
+            # For "until_next" behavior, clear override on each update cycle
+            if self._override_behavior == "until_next":
+                self._is_overridden = False
+                self._override_until = None
+                _LOGGER.info(
+                    "Scheduler %s override cleared (until_next)", self._target_entity
+                )
+                self.async_write_ha_state()
+            else:
+                _LOGGER.debug(
+                    "Skip update: scheduler %s is overridden (behavior=%s, until=%s)",
+                    self._target_entity,
+                    self._override_behavior,
+                    self._override_until.isoformat()
+                    if self._override_until
+                    else "manual",
+                )
+                return
 
         try:
             # 1. Calculate current time in minutes and get weekday
@@ -510,6 +720,9 @@ class UniversalSchedulerSwitch(SwitchEntity, RestoreEntity):
                 x_axis_type,
                 current_x_value,
             )
+
+            # Track what we're applying so we can detect manual changes
+            self._last_applied_value = actual_value
 
             # 5. Apply based on domain (with attribute support)
             if self._domain == "light":

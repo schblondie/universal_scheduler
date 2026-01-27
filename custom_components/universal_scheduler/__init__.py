@@ -131,6 +131,13 @@ SET_CONFIG_SCHEMA = vol.Schema(
         vol.Optional("enabled"): cv.boolean,
         vol.Optional("graphs_per_row"): vol.Coerce(int),
         vol.Optional("graphs"): list,  # Array of graph configs
+        # Override behavior settings
+        vol.Optional(
+            "override_behavior"
+        ): cv.string,  # 'none', 'until_next', 'until_day_end', 'for_duration', 'until_reenabled'
+        vol.Optional("override_duration"): vol.Coerce(
+            int
+        ),  # Duration in seconds for 'for_duration' mode
         # Legacy fields (for backward compatibility during migration)
         vol.Optional("attribute"): vol.Any(None, cv.string),
         vol.Optional("x_snap"): vol.Coerce(float),
@@ -304,6 +311,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
                 update_interval=config.get("update_interval", 300),
                 enabled=config.get("enabled", True),
                 graphs=config.get("graphs"),
+                override_behavior=config.get("override_behavior"),
+                override_duration=config.get("override_duration"),
             )
 
             _LOGGER.debug(f"Updated existing switch entity for {entity_id}")
@@ -377,6 +386,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
                     "update_interval": call.data.get("update_interval", 300),
                     "graphs_per_row": call.data.get("graphs_per_row", 1),
                     "graphs": call.data.get("graphs"),
+                    "override_behavior": call.data.get("override_behavior", "none"),
+                    "override_duration": call.data.get("override_duration", 3600),
                 }
             else:
                 # Legacy format - create with single graph
@@ -387,6 +398,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
                     "enabled": call.data.get("enabled", True),
                     "update_interval": call.data.get("update_interval", 300),
                     "graphs_per_row": call.data.get("graphs_per_row", 1),
+                    "override_behavior": call.data.get("override_behavior", "none"),
+                    "override_duration": call.data.get("override_duration", 3600),
                     "graphs": [
                         {
                             "id": "graph_1",
@@ -429,6 +442,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
                 scheduler["enabled"] = call.data["enabled"]
             if "graphs_per_row" in call.data:
                 scheduler["graphs_per_row"] = call.data["graphs_per_row"]
+            if "override_behavior" in call.data:
+                scheduler["override_behavior"] = call.data["override_behavior"]
+            if "override_duration" in call.data:
+                scheduler["override_duration"] = call.data["override_duration"]
 
             # Update graphs array if provided
             if "graphs" in call.data:
