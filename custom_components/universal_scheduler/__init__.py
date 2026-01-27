@@ -60,12 +60,18 @@ class SchedulerStore(Store):
                         "mode": cfg.pop("mode", "linear"),
                         "min_y": cfg.pop("min_y", 0),
                         "max_y": cfg.pop("max_y", 100),
-                        "x_snap": cfg.pop("snap_minutes", 0) or 0,  # Convert snap_minutes to x_snap
+                        "x_snap": cfg.pop("snap_minutes", 0)
+                        or 0,  # Convert snap_minutes to x_snap
                         "y_snap": cfg.pop("y_snap", 0),
                         "step_to_zero": cfg.pop("step_to_zero", False),
                         "x_axis_type": "time",
                         "x_axis_entity": None,
-                        "points": cfg.pop("points", [{"x": 0, "y": 0}, {"x": 1440, "y": 0}]),
+                        "x_axis_min": None,
+                        "x_axis_max": None,
+                        "x_axis_unit": None,
+                        "points": cfg.pop(
+                            "points", [{"x": 0, "y": 0}, {"x": 1440, "y": 0}]
+                        ),
                     }
                     cfg["graphs"] = [graph]
                     cfg.setdefault("graphs_per_row", 1)
@@ -78,58 +84,79 @@ class SchedulerStore(Store):
 
 
 # Graph schema for individual graphs within a scheduler
-GRAPH_SCHEMA = vol.Schema({
-    vol.Required("id"): cv.string,
-    vol.Optional("label"): cv.string,
-    vol.Optional("weekdays"): list,  # [0-6], 0=Sunday
-    vol.Optional("attribute"): vol.Any(None, cv.string),
-    vol.Optional("mode"): cv.string,
-    vol.Optional("min_y"): vol.Coerce(float),
-    vol.Optional("max_y"): vol.Coerce(float),
-    vol.Optional("x_snap"): vol.Coerce(float),
-    vol.Optional("y_snap"): vol.Coerce(float),
-    vol.Optional("step_to_zero"): cv.boolean,
-    vol.Optional("x_axis_type"): cv.string,  # 'time', 'lux', 'temperature' (future)
-    vol.Optional("x_axis_entity"): cv.string,  # entity for x-axis value (future)
-    vol.Optional("points"): list,
-})
+GRAPH_SCHEMA = vol.Schema(
+    {
+        vol.Required("id"): cv.string,
+        vol.Optional("label"): cv.string,
+        vol.Optional("weekdays"): list,  # [0-6], 0=Sunday
+        vol.Optional("attribute"): vol.Any(None, cv.string),
+        vol.Optional("mode"): cv.string,
+        vol.Optional("min_y"): vol.Coerce(float),
+        vol.Optional("max_y"): vol.Coerce(float),
+        vol.Optional("x_snap"): vol.Coerce(float),
+        vol.Optional("y_snap"): vol.Coerce(float),
+        vol.Optional("step_to_zero"): cv.boolean,
+        vol.Optional("x_axis_type"): cv.string,  # 'time' or 'entity'
+        vol.Optional("x_axis_entity"): vol.Any(
+            None, cv.string
+        ),  # entity for x-axis value
+        vol.Optional("x_axis_min"): vol.Any(
+            None, vol.Coerce(float)
+        ),  # min value for entity-based x-axis
+        vol.Optional("x_axis_max"): vol.Any(
+            None, vol.Coerce(float)
+        ),  # max value for entity-based x-axis
+        vol.Optional("x_axis_unit"): vol.Any(
+            None, cv.string
+        ),  # unit for entity-based x-axis display
+        vol.Optional("points"): list,
+    }
+)
 
 # Service schemas
-CREATE_SCHEDULER_SCHEMA = vol.Schema({
-    vol.Required("name"): cv.string,
-    vol.Required("entity_id"): cv.string,
-})
+CREATE_SCHEDULER_SCHEMA = vol.Schema(
+    {
+        vol.Required("name"): cv.string,
+        vol.Required("entity_id"): cv.string,
+    }
+)
 
-SET_CONFIG_SCHEMA = vol.Schema({
-    vol.Required("entity_id"): cv.string,
-    vol.Optional("target_entity"): cv.string,
-    vol.Optional("name"): cv.string,
-    vol.Optional("domain"): cv.string,
-    vol.Optional("update_interval"): vol.Coerce(int),
-    vol.Optional("enabled"): cv.boolean,
-    vol.Optional("graphs_per_row"): vol.Coerce(int),
-    vol.Optional("graphs"): list,  # Array of graph configs
-    # Legacy fields (for backward compatibility during migration)
-    vol.Optional("attribute"): vol.Any(None, cv.string),
-    vol.Optional("x_snap"): vol.Coerce(float),
-    vol.Optional("y_snap"): vol.Coerce(float),
-    vol.Optional("step_to_zero"): cv.boolean,
-    vol.Optional("mode"): cv.string,
-    vol.Optional("min_y"): vol.Coerce(float),
-    vol.Optional("max_y"): vol.Coerce(float),
-    vol.Optional("snap_minutes"): vol.Any(None, vol.Coerce(int)),
-    vol.Optional("points"): list,
-    vol.Optional("weekdays"): list,
-    vol.Optional("graph_label"): cv.string,
-})
+SET_CONFIG_SCHEMA = vol.Schema(
+    {
+        vol.Required("entity_id"): cv.string,
+        vol.Optional("target_entity"): cv.string,
+        vol.Optional("name"): cv.string,
+        vol.Optional("domain"): cv.string,
+        vol.Optional("update_interval"): vol.Coerce(int),
+        vol.Optional("enabled"): cv.boolean,
+        vol.Optional("graphs_per_row"): vol.Coerce(int),
+        vol.Optional("graphs"): list,  # Array of graph configs
+        # Legacy fields (for backward compatibility during migration)
+        vol.Optional("attribute"): vol.Any(None, cv.string),
+        vol.Optional("x_snap"): vol.Coerce(float),
+        vol.Optional("y_snap"): vol.Coerce(float),
+        vol.Optional("step_to_zero"): cv.boolean,
+        vol.Optional("mode"): cv.string,
+        vol.Optional("min_y"): vol.Coerce(float),
+        vol.Optional("max_y"): vol.Coerce(float),
+        vol.Optional("snap_minutes"): vol.Any(None, vol.Coerce(int)),
+        vol.Optional("points"): list,
+        vol.Optional("weekdays"): list,
+        vol.Optional("graph_label"): cv.string,
+    }
+)
 
-DELETE_SCHEDULER_SCHEMA = vol.Schema({
-    vol.Required("entity_id"): cv.string,
-})
+DELETE_SCHEDULER_SCHEMA = vol.Schema(
+    {
+        vol.Required("entity_id"): cv.string,
+    }
+)
 
-APPLY_NOW_SCHEMA = vol.Schema({
-    vol.Required("entity_id"): cv.string,
-})
+APPLY_NOW_SCHEMA = vol.Schema(
+    {
+        vol.Required("entity_id"): cv.string,
+    }
+)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
@@ -138,7 +165,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     hass.data[DOMAIN].setdefault("schedulers", {})
 
     # Setup persistent storage with migration support
-    store = SchedulerStore(hass, STORAGE_VERSION, STORAGE_KEY, minor_version=STORAGE_MINOR_VERSION)
+    store = SchedulerStore(
+        hass, STORAGE_VERSION, STORAGE_KEY, minor_version=STORAGE_MINOR_VERSION
+    )
     hass.data[DOMAIN]["store"] = store
 
     def migrate_to_multi_graph(cfg):
@@ -192,10 +221,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
         hass.data[DOMAIN]["interval_in_seconds"] = interval_in_seconds
         hass.data[DOMAIN]["multi_graph_migrated"] = multi_graph_migrated
         hass.data[DOMAIN]["schedulers"] = schedulers
-        _LOGGER.info(f"Loaded {len(hass.data[DOMAIN]['schedulers'])} schedulers from storage")
+        _LOGGER.info(
+            f"Loaded {len(hass.data[DOMAIN]['schedulers'])} schedulers from storage"
+        )
 
     # Register WebSocket API for frontend to fetch schedulers
-    @websocket_api.websocket_command({vol.Required("type"): "universal_scheduler/get_schedulers"})
+    @websocket_api.websocket_command(
+        {vol.Required("type"): "universal_scheduler/get_schedulers"}
+    )
     @websocket_api.async_response
     async def websocket_get_schedulers(hass, connection, msg):
         """Handle get_schedulers WebSocket command."""
@@ -229,11 +262,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     # Helper function to save schedulers to storage
     async def save_schedulers():
         """Save schedulers to persistent storage."""
-        await store.async_save({
-            "schedulers": hass.data[DOMAIN]["schedulers"],
-            "interval_in_seconds": hass.data[DOMAIN].get("interval_in_seconds", True),
-            "multi_graph_migrated": hass.data[DOMAIN].get("multi_graph_migrated", True),
-        })
+        await store.async_save(
+            {
+                "schedulers": hass.data[DOMAIN]["schedulers"],
+                "interval_in_seconds": hass.data[DOMAIN].get(
+                    "interval_in_seconds", True
+                ),
+                "multi_graph_migrated": hass.data[DOMAIN].get(
+                    "multi_graph_migrated", True
+                ),
+            }
+        )
 
     # Helper to dynamically create or update switch entities
     async def _ensure_switch_entity(entity_id: str):
@@ -294,20 +333,25 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
             "enabled": True,
             "update_interval": 300,
             "graphs_per_row": 1,
-            "graphs": [{
-                "id": "graph_1",
-                "label": "Schedule 1",
-                "weekdays": [0, 1, 2, 3, 4, 5, 6],
-                "attribute": None,
-                "mode": "linear",
-                "min_y": 0,
-                "max_y": 100,
-                "y_snap": 0,
-                "step_to_zero": False,
-                "x_axis_type": "time",
-                "x_axis_entity": None,
-                "points": [{"x": 0, "y": 0}, {"x": 1440, "y": 0}],
-            }],
+            "graphs": [
+                {
+                    "id": "graph_1",
+                    "label": "Schedule 1",
+                    "weekdays": [0, 1, 2, 3, 4, 5, 6],
+                    "attribute": None,
+                    "mode": "linear",
+                    "min_y": 0,
+                    "max_y": 100,
+                    "y_snap": 0,
+                    "step_to_zero": False,
+                    "x_axis_type": "time",
+                    "x_axis_entity": None,
+                    "x_axis_min": None,
+                    "x_axis_max": None,
+                    "x_axis_unit": None,
+                    "points": [{"x": 0, "y": 0}, {"x": 1440, "y": 0}],
+                }
+            ],
         }
 
         await save_schedulers()
@@ -339,21 +383,30 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
                     "enabled": call.data.get("enabled", True),
                     "update_interval": call.data.get("update_interval", 300),
                     "graphs_per_row": call.data.get("graphs_per_row", 1),
-                    "graphs": [{
-                        "id": "graph_1",
-                        "label": call.data.get("graph_label", "Schedule 1"),
-                        "weekdays": call.data.get("weekdays", [0, 1, 2, 3, 4, 5, 6]),
-                        "attribute": call.data.get("attribute"),
-                        "mode": call.data.get("mode", "linear"),
-                        "min_y": call.data.get("min_y", 0),
-                        "max_y": call.data.get("max_y", 100),
-                        "x_snap": call.data.get("x_snap", 0),
-                        "y_snap": call.data.get("y_snap", 0),
-                        "step_to_zero": call.data.get("step_to_zero", False),
-                        "x_axis_type": "time",
-                        "x_axis_entity": None,
-                        "points": call.data.get("points", [{"x": 0, "y": 0}, {"x": 1440, "y": 0}]),
-                    }],
+                    "graphs": [
+                        {
+                            "id": "graph_1",
+                            "label": call.data.get("graph_label", "Schedule 1"),
+                            "weekdays": call.data.get(
+                                "weekdays", [0, 1, 2, 3, 4, 5, 6]
+                            ),
+                            "attribute": call.data.get("attribute"),
+                            "mode": call.data.get("mode", "linear"),
+                            "min_y": call.data.get("min_y", 0),
+                            "max_y": call.data.get("max_y", 100),
+                            "x_snap": call.data.get("x_snap", 0),
+                            "y_snap": call.data.get("y_snap", 0),
+                            "step_to_zero": call.data.get("step_to_zero", False),
+                            "x_axis_type": "time",
+                            "x_axis_entity": None,
+                            "x_axis_min": None,
+                            "x_axis_max": None,
+                            "x_axis_unit": None,
+                            "points": call.data.get(
+                                "points", [{"x": 0, "y": 0}, {"x": 1440, "y": 0}]
+                            ),
+                        }
+                    ],
                 }
         else:
             # Update existing scheduler config
