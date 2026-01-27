@@ -34,8 +34,20 @@ const CARD_STYLES = `
     }
 
     .scheduler-card-header .state {
-        font-size: 0.9rem;
-        opacity: 0.7;
+        font-size: 0.85rem;
+        padding: 4px 10px;
+        border-radius: 12px;
+        background: rgba(var(--rgb-disabled-color, 158, 158, 158), 0.2);
+        color: var(--disabled-text-color, #9e9e9e);
+    }
+
+    .scheduler-card-header .state.active {
+        background: rgba(var(--rgb-success-color, 76, 175, 80), 0.2);
+        color: var(--success-color, #4caf50);
+    }
+
+    .scheduler-card-header .header-toggle {
+        flex-shrink: 0;
     }
 
     .graph-selector {
@@ -174,21 +186,27 @@ const CARD_STYLES = `
         position: absolute;
         top: 0;
         bottom: 0;
-        width: 2px;
+        left: 0;
+        width: 3px;
         background: var(--error-color, #f44336);
-        z-index: 5;
+        z-index: 20;
         pointer-events: none;
+        box-shadow: 0 0 6px 1px rgba(244, 67, 54, 0.7);
+        min-height: 100%;
     }
 
     .current-time-marker::before {
         content: '';
         position: absolute;
-        top: 0;
-        left: -4px;
-        width: 10px;
-        height: 10px;
+        top: -8px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 14px;
+        height: 14px;
         background: var(--error-color, #f44336);
         border-radius: 50%;
+        box-shadow: 0 0 6px rgba(244, 67, 54, 0.7);
+        border: 2px solid white;
     }
 
     .current-value-row {
@@ -810,6 +828,11 @@ class UniversalSchedulerCardEditor extends HTMLElement {
                 <input type="checkbox" id="show_current_value" ${this._config.show_current_value !== false ? 'checked' : ''}>
                 <label for="show_current_value">Show current value display</label>
             </div>
+
+            <div class="editor-checkbox">
+                <input type="checkbox" id="allow_toggle" ${this._config.allow_toggle ? 'checked' : ''}>
+                <label for="allow_toggle">Allow toggling scheduler on/off from header</label>
+            </div>
         `;
 
         // Setup event listeners
@@ -906,6 +929,7 @@ class UniversalSchedulerCardEditor extends HTMLElement {
         this.querySelector('#show_points_editor').addEventListener('change', (e) => this._valueChanged('show_points_editor', e.target.checked));
         this.querySelector('#show_weekdays').addEventListener('change', (e) => this._valueChanged('show_weekdays', e.target.checked));
         this.querySelector('#show_current_value').addEventListener('change', (e) => this._valueChanged('show_current_value', e.target.checked));
+        this.querySelector('#allow_toggle').addEventListener('change', (e) => this._valueChanged('allow_toggle', e.target.checked));
     }
 
     _updateAutocompleteList() {
@@ -1257,7 +1281,11 @@ class UniversalSchedulerCard extends HTMLElement {
                 <div class="scheduler-card-header">
                     <ha-icon class="entity-icon" icon="${this._getDomainIcon(this._scheduler.domain)}"></ha-icon>
                     <span class="title">${this._scheduler.name}</span>
-                    <span class="state">${this._scheduler.enabled ? 'Active' : 'Disabled'}</span>
+                    ${this._config.allow_toggle ? `
+                        <div class="toggle-switch header-toggle ${this._scheduler.enabled ? 'active' : ''}" data-action="toggleScheduler" title="${this._scheduler.enabled ? 'Click to disable' : 'Click to enable'}"></div>
+                    ` : `
+                        <span class="state ${this._scheduler.enabled ? 'active' : 'inactive'}">${this._scheduler.enabled ? 'Active' : 'Disabled'}</span>
+                    `}
                 </div>
             ` : ''}
 
@@ -1528,6 +1556,11 @@ class UniversalSchedulerCard extends HTMLElement {
     _setupEventListeners() {
         const container = this.shadowRoot.querySelector('.scheduler-card-container');
         if (!container) return;
+
+        // Toggle scheduler on/off
+        container.querySelector('[data-action="toggleScheduler"]')?.addEventListener('click', () => {
+            this._toggleSchedulerEnabled();
+        });
 
         // Edit action buttons (undo, redo, save, reset)
         container.querySelector('[data-action="undo"]')?.addEventListener('click', () => {
@@ -2060,6 +2093,23 @@ class UniversalSchedulerCard extends HTMLElement {
     async _savePoints(graphIndex, points) {
         // Use staged changes instead
         this._stageChange(graphIndex, 'points', points);
+    }
+
+    async _toggleSchedulerEnabled() {
+        if (!this._scheduler || !this._hass) return;
+
+        try {
+            // Toggle the switch entity
+            const switchEntity = `switch.universal_scheduler_${this._scheduler.entityId.replace(/\./g, '_')}`;
+            await this._hass.callService('switch', this._scheduler.enabled ? 'turn_off' : 'turn_on', {
+                entity_id: switchEntity
+            });
+
+            // Reload data after toggle
+            setTimeout(() => this._loadSchedulerData(), 500);
+        } catch (e) {
+            console.error('Failed to toggle scheduler:', e);
+        }
     }
 
     async _applyNow() {

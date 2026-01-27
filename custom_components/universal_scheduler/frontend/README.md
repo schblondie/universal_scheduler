@@ -58,11 +58,14 @@ The card is automatically registered when the integration loads. Add it through:
 | `graph_index` | number | - | Specific graph index to display (0, 1, 2...). Omit to show graph selector |
 | `graph_height` | number | 200 | Height of the graph in pixels (100-600) |
 | `show_header` | boolean | true | Show card header with entity name and status |
-| `show_graph_settings` | boolean | false | Show graph settings when NOT in Lovelace edit mode |
-| `show_points_editor` | boolean | false | Show the collapsible points editor section |
+| `allow_edit` | boolean | true | Allow editing points by dragging and double-clicking |
+| `show_graph_settings` | boolean | false | Show graph settings section (only visible when `allow_edit` is true) |
+| `show_points_editor` | boolean | false | Show collapsible points editor (only visible when `allow_edit` is true) |
 | `show_weekdays` | boolean | true | Show the weekday selector buttons |
 | `show_current_value` | boolean | true | Show current and next value display with Apply button |
-| `allow_edit` | boolean | true | Allow editing points by dragging and double-clicking |
+| `allow_toggle` | boolean | false | Show a toggle switch in header to enable/disable the scheduler |
+
+> **Note:** The `show_graph_settings` and `show_points_editor` options are only effective when `allow_edit` is enabled. If `allow_edit` is false, these sections are always hidden regardless of their settings.
 
 ### Example YAML Configuration
 
@@ -71,11 +74,12 @@ type: custom:universal-scheduler-card
 entity: switch.universal_scheduler_light_bedroom
 graph_height: 250
 show_header: true
+allow_edit: true
 show_graph_settings: false
 show_points_editor: false
 show_weekdays: true
 show_current_value: true
-allow_edit: true
+allow_toggle: true
 ```
 
 ### Minimal Configuration
@@ -83,6 +87,16 @@ allow_edit: true
 ```yaml
 type: custom:universal-scheduler-card
 entity: switch.universal_scheduler_climate_living_room
+```
+
+### View-Only Configuration
+
+```yaml
+type: custom:universal-scheduler-card
+entity: switch.universal_scheduler_light_bedroom
+allow_edit: false
+show_header: true
+allow_toggle: true
 ```
 
 ### Show Specific Graph
@@ -115,11 +129,32 @@ When viewing the dashboard normally:
 
 ### Card Features
 
+**Header Controls:**
+- Shows entity name and scheduler status (active/paused)
+- Optional toggle switch to enable/disable the scheduler (`allow_toggle: true`)
+- When toggle is enabled, click the switch to turn scheduler on/off
+
+**Staged Changes & Undo/Redo:**
+- Changes to points are staged locally before saving
+- **Undo button** (↶): Reverts the last change
+- **Redo button** (↷): Re-applies an undone change
+- **Save button** (✓): Commits all staged changes to Home Assistant
+- **Reset button** (✗): Discards all staged changes and restores original state
+- Yellow warning bar appears when you have unsaved changes
+- Changes are automatically reset if you navigate away
+
 **Graph Interaction:**
 - Drag points to adjust values
 - Double-click on the graph to add new points
 - Points snap to configured X/Y snap intervals
 - Current time marker shows real-time position (time-based graphs)
+- Click a point once to select, click again to delete
+
+**Graph Settings:**
+- **Y-Min/Y-Max**: Set the value range for the Y axis
+- **Y-Snap**: Snap interval for values (e.g., 5 snaps to 0, 5, 10...)
+- **X-Snap**: Snap interval for X axis (time or position)
+- **X-Axis Type**: Choose between Time-based or Index-based graph
 
 **Weekday Selector:**
 - Toggle which days the schedule applies to
