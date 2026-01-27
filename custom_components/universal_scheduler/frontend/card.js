@@ -3387,6 +3387,8 @@ class UniversalSchedulerCard extends HTMLElement {
 
     _renderGraphSettings(graph) {
         const ySnapValue = graph.ySnap ?? 0;
+        const xSnapValue = graph.xSnap ?? 0;
+        const isEntityBased = graph.xAxisType === 'entity';
         const collapsed = !this._isEditing ? 'collapsed' : '';
 
         return `
@@ -3426,6 +3428,53 @@ class UniversalSchedulerCard extends HTMLElement {
                                 <option value="1" ${ySnapValue === 1 ? 'selected' : ''}>1</option>
                                 <option value="5" ${ySnapValue === 5 ? 'selected' : ''}>5</option>
                                 <option value="10" ${ySnapValue === 10 ? 'selected' : ''}>10</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="card-graph-settings" style="margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--divider-color);">
+                        <div class="input-group">
+                            <label>X-Axis</label>
+                            <select data-setting="xAxisType">
+                                <option value="time" ${!isEntityBased ? 'selected' : ''}>Time (24h)</option>
+                                <option value="entity" ${isEntityBased ? 'selected' : ''}>Entity</option>
+                            </select>
+                        </div>
+                        ${isEntityBased ? `
+                            <div class="input-group">
+                                <label>X-Entity</label>
+                                <input type="text" data-setting="xAxisEntity" value="${graph.xAxisEntity || ''}" placeholder="sensor.xxx" style="width: 120px;">
+                            </div>
+                            <div class="input-group">
+                                <label>X-Min</label>
+                                <input type="number" data-setting="xAxisMin" value="${graph.xAxisMin ?? 0}" style="width: 60px;">
+                            </div>
+                            <div class="input-group">
+                                <label>X-Max</label>
+                                <input type="number" data-setting="xAxisMax" value="${graph.xAxisMax ?? 100}" style="width: 60px;">
+                            </div>
+                            <div class="input-group">
+                                <label>X-Unit</label>
+                                <input type="text" data-setting="xAxisUnit" value="${graph.xAxisUnit || ''}" placeholder="°C" style="width: 50px;">
+                            </div>
+                        ` : ''}
+                        <div class="input-group">
+                            <label>X-Snap</label>
+                            <select data-setting="xSnap">
+                                <option value="0" ${xSnapValue === 0 ? 'selected' : ''}>Off</option>
+                                ${isEntityBased ? `
+                                    <option value="0.1" ${xSnapValue === 0.1 ? 'selected' : ''}>0.1</option>
+                                    <option value="0.5" ${xSnapValue === 0.5 ? 'selected' : ''}>0.5</option>
+                                    <option value="1" ${xSnapValue === 1 ? 'selected' : ''}>1</option>
+                                    <option value="5" ${xSnapValue === 5 ? 'selected' : ''}>5</option>
+                                    <option value="10" ${xSnapValue === 10 ? 'selected' : ''}>10</option>
+                                ` : `
+                                    <option value="1" ${xSnapValue === 1 ? 'selected' : ''}>1 min</option>
+                                    <option value="5" ${xSnapValue === 5 ? 'selected' : ''}>5 min</option>
+                                    <option value="10" ${xSnapValue === 10 ? 'selected' : ''}>10 min</option>
+                                    <option value="15" ${xSnapValue === 15 ? 'selected' : ''}>15 min</option>
+                                    <option value="30" ${xSnapValue === 30 ? 'selected' : ''}>30 min</option>
+                                    <option value="60" ${xSnapValue === 60 ? 'selected' : ''}>1 hour</option>
+                                `}
                             </select>
                         </div>
                     </div>
@@ -3590,7 +3639,9 @@ class UniversalSchedulerCard extends HTMLElement {
                 el.addEventListener('change', (e) => {
                     if (this._config.allow_edit === false) return;
                     let value = e.target.value;
-                    if (el.type === 'number' || setting === 'ySnap' || setting === 'minY' || setting === 'maxY') {
+                    // Parse numeric settings
+                    const numericSettings = ['ySnap', 'xSnap', 'minY', 'maxY', 'xAxisMin', 'xAxisMax'];
+                    if (el.type === 'number' || numericSettings.includes(setting)) {
                         value = parseFloat(value);
                     }
                     this._updateGraphSetting(setting, value);
@@ -3789,11 +3840,22 @@ class UniversalSchedulerCard extends HTMLElement {
             'stepToZero': 'step_to_zero',
             'minY': 'min_y',
             'maxY': 'max_y',
-            'ySnap': 'y_snap'
+            'ySnap': 'y_snap',
+            'xSnap': 'x_snap',
+            'xAxisType': 'x_axis_type',
+            'xAxisEntity': 'x_axis_entity',
+            'xAxisMin': 'x_axis_min',
+            'xAxisMax': 'x_axis_max',
+            'xAxisUnit': 'x_axis_unit'
         };
 
         const backendSetting = settingMap[setting] || setting;
         await this._updateGraphProperty(graphIndex, backendSetting, value);
+
+        // If X-axis type changed, re-render to show/hide entity options
+        if (setting === 'xAxisType') {
+            this._render();
+        }
     }
 
     async _updatePoint(pointIndex, field, value) {
